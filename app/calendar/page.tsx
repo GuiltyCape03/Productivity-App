@@ -3,22 +3,18 @@
 import { DashboardProvider } from "@/modules/dashboard/DashboardProvider";
 import { CalendarPanel } from "@/modules/calendar/CalendarPanel";
 import { useSyncPreferences } from "@/modules/dashboard/useSyncPreferences";
+import { PageLayout } from "@/components/layout/PageLayout";
 
 function CalendarContent() {
   useSyncPreferences();
   return (
-    <div className="mx-auto max-w-7xl space-y-8 px-6 pb-16 md:px-8">
-      <header className="pt-6 md:pt-8">
-        <p className="text-xs uppercase tracking-[0.18em] text-foreground-muted">Calendario</p>
-        <h1 className="mt-2 text-4xl font-semibold tracking-tight text-foreground">Compromisos reales</h1>
-        <p className="mt-3 max-w-2xl text-[15.5px] leading-7 text-foreground-muted">
-          Visualiza tus eventos, sincroniza Google Calendar y organiza bloques profundos sin perder el foco.
-        </p>
-      </header>
-      <section>
-        <CalendarPanel />
-      </section>
-    </div>
+    <PageLayout
+      eyebrow="Calendario"
+      title="Compromisos reales"
+      description="Visualiza tus eventos, sincroniza calendarios externos y protege tus bloques profundos. Reordena agenda, bloquea tiempos y comparte disponibilidad en segundos."
+    >
+      <CalendarPanel />
+    </PageLayout>
   );
 }
 
