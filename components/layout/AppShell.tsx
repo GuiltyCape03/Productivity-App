@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { DailyDiagnostic } from "@/modules/dashboard/DailyDiagnostic";
 import { useDashboard } from "@/modules/dashboard/DashboardProvider";
 import { useSyncPreferences } from "@/modules/dashboard/useSyncPreferences";
+import { Badge } from "@/components/ui/badge";
 
 interface AppShellProps {
   tasks: React.ReactNode;

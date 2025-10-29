@@ -28,6 +28,23 @@ function TypingIndicator() {
   );
 }
 
+function TypingIndicator() {
+  return (
+    <div className="flex w-fit items-center gap-3 rounded-2xl border border-border/40 bg-surface-elevated/60 px-4 py-2 text-xs font-medium text-foreground">
+      <span className="uppercase tracking-[0.18em] text-foreground-muted">Copiloto</span>
+      <div className="flex items-center gap-1">
+        {[0, 1, 2].map((index) => (
+          <span
+            key={index}
+            className="h-2 w-2 rounded-full bg-accent-primary/80"
+            style={{ animation: "typing 1.2s ease-in-out infinite", animationDelay: `${index * 0.12}s` }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ChatView() {
   const { activeProjectId, setActiveProject, projects, snapshot, refreshSnapshot } = useDashboard();
   useSyncPreferences();

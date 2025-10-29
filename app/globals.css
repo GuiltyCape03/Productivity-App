@@ -60,6 +60,8 @@ body {
 
 body * {
   border-color: var(--surface-border);
+  transition: background-color var(--transition-base), border-color var(--transition-base), color var(--transition-base),
+    opacity var(--transition-base);
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -119,5 +121,38 @@ h1, h2, h3, h4, h5, h6 {
   100% {
     transform: translateY(0);
     opacity: 0.5;
+  }
+
+  .layout-grid {
+    display: grid;
+    grid-template-columns: var(--grid-columns);
+    gap: var(--grid-gap);
+  }
+
+  .glass-panel {
+    background-color: var(--surface-overlay);
+    border: 1px solid color-mix(in srgb, var(--surface-border) 55%, transparent);
+    backdrop-filter: blur(18px) saturate(140%);
+    box-shadow: var(--shadow-card);
+  }
+
+  .card-bleed {
+    margin-left: calc(var(--card-padding-x) * -1);
+    margin-right: calc(var(--card-padding-x) * -1);
+  }
+}
+
+@keyframes typing {
+  0% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
   }
 }
