@@ -1,0 +1,1115 @@
+"use client";
+
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, AreaChart, Area } from "recharts";
+import { v4 as uuidv4 } from "uuid";
+import { format } from "date-fns";
+import { Settings, Download, Upload, Timer, Focus, Keyboard, Rocket, Sun, Moon, Bell } from "lucide-react";
+
+// ============== Tipos ==============
+/** Una meta medible, tipo OKR minimalista. */
+type Goal = {
+  id: string;
+  title: string;
+  project: string; // economía, investigación, cursos, etc.
+  targetUnits: number; // unidades a lograr (ej. páginas, problemas, horas)
+  unitLabel: string; // "páginas", "ejercicios", "horas"
+  dueDate?: string; // ISO
+  createdAt: string; // ISO
+  history: { date: string; units: number }[]; // registro diario de avance
+};
+
+/** Una tarea ejecutable y concreta. */
+type Task = {
+  id: string;
+  title: string;
+  project: string; // etiqueta para agrupar
+  estimateMin: number; // estimación grosera
+  dueDate?: string; // ISO
+  notes?: string;
+  points: number; // ponderación para el score diario
+  done: boolean;
+  createdAt: string; // ISO
+  priority: "low" | "med" | "high";
+};
+
+/** Cierre de día con score. */
+type DailyReview = {
+  id: string;
+  date: string; // ISO solo día
+  score: number; // 0 a 100
+  completedTasks: string[]; // ids
+  notes?: string;
+};
+
+// ============== Helpers Persistencia ==============
+const LS_KEYS = {
+  goals: "nahum_cls_goals",
+  tasks: "nahum_cls_tasks",
+  reviews: "nahum_cls_reviews",
+  cfg: "nahum_cls_cfg",
+};
+
+type Cfg = {
+  theme: "light" | "dark";
+  lang: "es" | "en";
+  focusBlockMin: number; // default 25
+  breakMin: number; // default 5
+  sound: boolean;
+  notifications: boolean;
+};
+
+function loadLS<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveLS<T>(key: string, value: T) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function todayISO(): string {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
+}
+
+function toISODate(dateStr?: string) {
+  if (!dateStr) return undefined;
+  const d = new Date(dateStr);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
+}
+
+function playBeep() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine"; o.frequency.value = 880; o.connect(g); g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02);
+    o.start();
+    setTimeout(() => { g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2); o.stop(ctx.currentTime + 0.21); }, 200);
+  } catch {}
+}
+
+// i18n mínimo
+const strings = {
+  es: {
+    title: "Classroom IA · Panel de Ejecución",
+    today: "Hoy",
+    tasks: "Tareas",
+    goals: "Metas",
+    review: "Cerrar día",
+    week: "Plan semanal",
+    backlog: "Backlog",
+    focus: "Enfoque",
+    settings: "Ajustes",
+    templates: "Plantillas",
+    dailyScore: "Score diario (últimos 21 días)",
+    velocity: "Velocidad por proyecto",
+    pending: "Pendientes",
+    emptyTasks: "No hay tareas. Qué lujo.",
+    newTask: "Nueva tarea",
+    newGoal: "Nueva meta",
+    activeGoals: "Metas activas",
+    closeChecklist: "Checklist de cierre",
+    closeHint: "Completa al menos 3 tareas hechas hoy y registra avances en 1 meta. Luego pulsa Calificar día.",
+    grade: "Calificar día",
+    history: "Histórico",
+    due: "Vence",
+    project: "Proyecto",
+    estimate: "Estimado (min)",
+    points: "Puntos",
+    notes: "Notas",
+    titleLbl: "Título",
+    goalUnits: "Unidades",
+    unitLabel: "Etiqueta",
+    goalDate: "Fecha objetivo",
+    save: "Guardar",
+    add: "Agregar",
+    create: "Crear",
+    progress: "Progreso",
+    eta: "ETA",
+    weekPlan: "Plan de la semana",
+    todayPlan: "Plan de hoy",
+    quickAdd: "Agregar rápido",
+    pomodoro: "Pomodoro",
+    start: "Iniciar",
+    pause: "Pausar",
+    reset: "Reiniciar",
+    focusBlock: "Bloque de enfoque",
+    break: "Descanso",
+    light: "Claro",
+    dark: "Oscuro",
+    language: "Idioma",
+    export: "Exportar",
+    import: "Importar",
+    allowNotif: "Permitir notificaciones",
+  },
+  en: {
+    title: "AI Classroom · Execution Panel",
+    today: "Today",
+    tasks: "Tasks",
+    goals: "Goals",
+    review: "Daily review",
+    week: "Weekly plan",
+    backlog: "Backlog",
+    focus: "Focus",
+    settings: "Settings",
+    templates: "Templates",
+    dailyScore: "Daily score (last 21 days)",
+    velocity: "Velocity by project",
+    pending: "Pending",
+    emptyTasks: "No tasks. Must be nice.",
+    newTask: "New task",
+    newGoal: "New goal",
+    activeGoals: "Active goals",
+    closeChecklist: "Day checklist",
+    closeHint: "Complete at least 3 tasks done today and log progress in 1 goal, then grade.",
+    grade: "Grade day",
+    history: "History",
+    due: "Due",
+    project: "Project",
+    estimate: "Estimate (min)",
+    points: "Points",
+    notes: "Notes",
+    titleLbl: "Title",
+    goalUnits: "Units",
+    unitLabel: "Unit label",
+    goalDate: "Target date",
+    save: "Save",
+    add: "Add",
+    create: "Create",
+    progress: "Progress",
+    eta: "ETA",
+    weekPlan: "Weekly plan",
+    todayPlan: "Today plan",
+    quickAdd: "Quick add",
+    pomodoro: "Pomodoro",
+    start: "Start",
+    pause: "Pause",
+    reset: "Reset",
+    focusBlock: "Focus block",
+    break: "Break",
+    light: "Light",
+    dark: "Dark",
+    language: "Language",
+    export: "Export",
+    import: "Import",
+    allowNotif: "Allow notifications",
+  }
+} as const;
+
+// ============== Componente Principal ==============
+export default function Dashboard() {
+  // estado
+  const [goals, setGoals] = useState<Goal[]>(() => loadLS<Goal[]>(LS_KEYS.goals, []));
+  const [tasks, setTasks] = useState<Task[]>(() => loadLS<Task[]>(LS_KEYS.tasks, []));
+  const [reviews, setReviews] = useState<DailyReview[]>(() => loadLS<DailyReview[]>(LS_KEYS.reviews, []));
+  const [cfg, setCfg] = useState<Cfg>(() => loadLS<Cfg>(LS_KEYS.cfg, { theme: "light", lang: "es", focusBlockMin: 25, breakMin: 5, sound: true, notifications: false }));
+
+  // Persistencia automática
+  useEffect(() => saveLS(LS_KEYS.goals, goals), [goals]);
+  useEffect(() => saveLS(LS_KEYS.tasks, tasks), [tasks]);
+  useEffect(() => saveLS(LS_KEYS.reviews, reviews), [reviews]);
+  useEffect(() => saveLS(LS_KEYS.cfg, cfg), [cfg]);
+
+  // Tema
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", cfg.theme === "dark");
+  }, [cfg.theme]);
+
+  // ====== Derivados ======
+  const t = strings[cfg.lang];
+  const pendingTasks = useMemo(() => tasks.filter(t => !t.done).sort((a,b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999")), [tasks]);
+  const completedToday = useMemo(() => {
+    const today = todayISO().slice(0,10);
+    return tasks.filter(t => t.done && t.createdAt.slice(0,10) === today);
+  }, [tasks]);
+
+  const weeklyScores = useMemo(() => {
+    const now = new Date(todayISO());
+    const days = [...Array(21)].map((_,i) => {
+      const d = new Date(now);
+      d.setDate(now.getDate() - (20 - i));
+      const key = d.toISOString().slice(0,10);
+      const r = reviews.find(rv => rv.date.slice(0,10) === key);
+      return { date: format(d, 'dd MMM'), score: r?.score ?? 0 };
+    });
+    return days;
+  }, [reviews]);
+
+  const velocityByProject = useMemo(() => {
+    const cutoff = new Date(todayISO());
+    cutoff.setDate(cutoff.getDate() - 14);
+    const proj: Record<string, { points: number; days: Set<string> }> = {};
+    reviews
+      .filter(r => new Date(r.date) >= cutoff)
+      .forEach(r => {
+        const day = r.date.slice(0,10);
+        r.completedTasks.forEach(id => {
+          const t = tasks.find(x => x.id === id);
+          if (!t) return;
+          if (!proj[t.project]) proj[t.project] = { points: 0, days: new Set() };
+          proj[t.project].points += t.points;
+          proj[t.project].days.add(day);
+        });
+      });
+    return Object.entries(proj).map(([project, v]) => ({ project, velocity: v.days.size ? v.points / v.days.size : 0 }));
+  }, [reviews, tasks]);
+
+  // ====== Acciones ======
+  function addGoal(g: Omit<Goal, "id" | "createdAt" | "history">) {
+    setGoals(prev => [...prev, { id: uuidv4(), createdAt: todayISO(), history: [], ...g }]);
+  }
+
+  function logGoalProgress(goalId: string, units: number) {
+    setGoals(prev => prev.map(g => g.id === goalId ? { ...g, history: [...g.history, { date: todayISO(), units }] } : g));
+  }
+
+  function addTask(t: Omit<Task, "id" | "createdAt" | "done">) {
+    setTasks(prev => [{ id: uuidv4(), createdAt: todayISO(), done: false, priority: "med", ...t }, ...prev]);
+  }
+
+  function toggleTask(id: string) {
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t));
+  }
+
+  function closeDay(notes?: string) {
+    const today = todayISO().slice(0,10);
+    const completed = tasks.filter(t => t.done && t.createdAt.slice(0,10) === today);
+    const taskPoints = completed.reduce((acc, t) => acc + (t.points + (t.priority === 'high' ? 10 : 0)), 0);
+    const progressed = goals.some(g => g.history.some(h => h.date.slice(0,10) === today));
+    const raw = taskPoints + (progressed ? 10 : 0);
+    const score = Math.max(0, Math.min(100, Math.round(raw)));
+    const review: DailyReview = { id: uuidv4(), date: todayISO(), score, completedTasks: completed.map(t => t.id), notes };
+    setReviews(prev => {
+      const other = prev.filter(r => r.date.slice(0,10) !== today);
+      return [...other, review];
+    });
+  }
+
+  function etaForGoal(g: Goal) {
+    const cutoff = new Date(todayISO());
+    cutoff.setDate(cutoff.getDate() - 14);
+    const recent = g.history.filter(h => new Date(h.date) >= cutoff);
+    const total = recent.reduce((a,b) => a + b.units, 0);
+    const days = new Set(recent.map(h => h.date.slice(0,10))).size || 1;
+    const rate = total / days; // unidades por día
+    const done = g.history.reduce((a,b) => a + b.units, 0);
+    const remaining = Math.max(0, g.targetUnits - done);
+    if (rate <= 0) return "—";
+    const daysNeeded = Math.ceil(remaining / rate);
+    const targetDate = new Date();
+    targetDate.setDate(targetDate.getDate() + daysNeeded);
+    return `${daysNeeded} días · ${format(targetDate, 'dd/MM/yyyy')}`;
+  }
+
+  // ====== Import/Export ======
+  function exportAll() {
+    const blob = new Blob([JSON.stringify({ goals, tasks, reviews, cfg }, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'classroom-ia-backup.json'; a.click();
+    URL.revokeObjectURL(url);
+  }
+  function importAll(file: File) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const obj = JSON.parse(String(reader.result));
+        if (obj.goals) setGoals(obj.goals);
+        if (obj.tasks) setTasks(obj.tasks);
+        if (obj.reviews) setReviews(obj.reviews);
+        if (obj.cfg) setCfg(obj.cfg);
+      } catch {}
+    };
+    reader.readAsText(file);
+  }
+
+  // ====== Atajos de teclado ======
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.altKey && e.key.toLowerCase() === 'n') {
+        const title = prompt('Tarea rápida');
+        if (title) addTask({ title, project: 'General', estimateMin: 30, points: 20 });
+      }
+      if (e.altKey && e.key.toLowerCase() === 'd') {
+        closeDay('Atajo de teclado');
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [tasks, goals]);
+
+  // ====== Notificaciones ======
+  useEffect(() => {
+    if (cfg.notifications && 'Notification' in window) {
+      if (Notification.permission === 'default') Notification.requestPermission();
+    }
+  }, [cfg.notifications]);
+
+  // ============== UI ==============
+  return (
+    <div className={`min-h-screen w-full ${cfg.theme === 'dark' ? 'bg-neutral-950 text-neutral-100' : 'bg-neutral-50 text-neutral-900'}`}>
+      <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
+        <header className="flex items-center justify-between">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2"><Rocket className="h-6 w-6" />{t.title}</h1>
+          <div className="flex items-center gap-3 text-sm">
+            <span>{t.today}: {format(new Date(), 'dd/MM/yyyy')}</span>
+            <ThemeToggle cfg={cfg} setCfg={setCfg} t={t} />
+          </div>
+        </header>
+
+        {/* Top: KPIs y gráfica */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card className="md:col-span-3">
+            <CardHeader className="pb-2">
+              <CardTitle>{t.dailyScore}</CardTitle>
+            </CardHeader>
+            <CardContent className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={weeklyScores}>
+                  <defs>
+                    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopOpacity={0.35} />
+                      <stop offset="95%" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis domain={[0,100]} />
+                  <Tooltip />
+                  <Area type="monotone" dataKey="score" strokeWidth={2} fillOpacity={1} fill="url(#g)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle>{t.velocity}</CardTitle>
+            </CardHeader>
+            <CardContent className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={velocityByProject}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="project" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="velocity" />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Tabs defaultValue="tasks" className="w-full">
+          <TabsList className="flex flex-wrap gap-2">
+            <TabsTrigger value="tasks">{t.tasks}</TabsTrigger>
+            <TabsTrigger value="goals">{t.goals}</TabsTrigger>
+            <TabsTrigger value="week">{t.week}</TabsTrigger>
+            <TabsTrigger value="backlog">{t.backlog}</TabsTrigger>
+            <TabsTrigger value="focus">{t.focus}</TabsTrigger>
+            <TabsTrigger value="templates">{t.templates}</TabsTrigger>
+            <TabsTrigger value="review">{t.review}</TabsTrigger>
+            <TabsTrigger value="settings"><Settings className="h-4 w-4" /></TabsTrigger>
+          </TabsList>
+
+          {/* ====== TAREAS ====== */}
+          <TabsContent value="tasks" className="mt-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="md:col-span-2">
+                <CardHeader className="pb-2"><CardTitle>{t.pending}</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  <QuickAdd onAdd={(title) => addTask({ title, project: 'General', estimateMin: 30, points: 20 })} label={t.quickAdd} />
+                  {pendingTasks.length === 0 && (
+                    <div className="text-sm text-neutral-500">{t.emptyTasks}</div>
+                  )}
+                  {pendingTasks.map(task => (
+                    <TaskRow key={task.id} task={task} toggle={toggleTask} />
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2"><CardTitle>{t.newTask}</CardTitle></CardHeader>
+                <TaskForm onCreate={addTask} t={t} />
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* ====== METAS ====== */}
+          <TabsContent value="goals" className="mt-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="md:col-span-2">
+                <CardHeader className="pb-2"><CardTitle>{t.activeGoals}</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  {goals.length === 0 && <div className="text-sm text-neutral-500">Sin metas no hay milagros.</div>}
+                  {goals.map(g => (
+                    <div key={g.id} className="rounded-2xl border p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-semibold">{g.title}</div>
+                          <div className="text-xs text-neutral-500">{g.project} · objetivo: {g.targetUnits} {g.unitLabel}{g.dueDate ? ` · ${t.due} ${format(new Date(g.dueDate), 'dd/MM')}` : ''}</div>
+                        </div>
+                        <Badge variant="secondary">{t.eta}: {etaForGoal(g)}</Badge>
+                      </div>
+                      <GoalMiniChart goal={g} t={t} />
+                      <div className="flex items-end gap-2">
+                        <div className="grow">
+                          <Label className="text-xs">Registrar avance de hoy ({g.unitLabel})</Label>
+                          <Input type="number" min={0} step={1} placeholder={`ej. 3`} onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              const v = Number((e.target as HTMLInputElement).value);
+                              if (!isNaN(v) && v >= 0) {
+                                logGoalProgress(g.id, v);
+                                (e.target as HTMLInputElement).value = '';
+                              }
+                            }
+                          }} />
+                        </div>
+                        <Button onClick={() => logGoalProgress(g.id, 1)}>+1</Button>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2"><CardTitle>{t.newGoal}</CardTitle></CardHeader>
+                <GoalForm onCreate={addGoal} t={t} />
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* ====== SEMANA ====== */}
+          <TabsContent value="week" className="mt-4">
+            <WeekPlan tasks={tasks} addTask={addTask} t={t} />
+          </TabsContent>
+
+          {/* ====== BACKLOG ====== */}
+          <TabsContent value="backlog" className="mt-4">
+            <Backlog tasks={tasks} setTasks={setTasks} t={t} />
+          </TabsContent>
+
+          {/* ====== FOCO ====== */}
+          <TabsContent value="focus" className="mt-4">
+            <FocusTimer cfg={cfg} setCfg={setCfg} t={t} />
+          </TabsContent>
+
+          {/* ====== PLANTILLAS ====== */}
+          <TabsContent value="templates" className="mt-4">
+            <Templates addTask={addTask} addGoal={addGoal} />
+          </TabsContent>
+
+          {/* ====== CIERRE DEL DÍA ====== */}
+          <TabsContent value="review" className="mt-4">
+            <Card>
+              <CardHeader className="pb-2"><CardTitle>{t.closeChecklist}</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-sm">{t.closeHint}</div>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button size="lg">{t.grade}</Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>{t.review}</DialogTitle>
+                    </DialogHeader>
+                    <ReviewForm onSubmit={(notes) => closeDay(notes)} t={t} />
+                  </DialogContent>
+                </Dialog>
+
+                <div className="pt-2">
+                  <div className="font-semibold mb-2">{t.history}</div>
+                  <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+                    {reviews.sort((a,b) => a.date.localeCompare(b.date)).map(r => (
+                      <div key={r.id} className="rounded-xl border p-2 text-center">
+                        <div className="text-xs text-neutral-500">{format(new Date(r.date), 'dd/MM')}</div>
+                        <div className="text-lg font-bold">{r.score}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ====== AJUSTES ====== */}
+          <TabsContent value="settings" className="mt-4">
+            <SettingsPane cfg={cfg} setCfg={setCfg} exportAll={exportAll} importAll={importAll} t={t} />
+          </TabsContent>
+        </Tabs>
+
+        {/* Footer */}
+        <div className="text-center text-xs text-neutral-500 pt-4">Hecho para ejecutar, no para procrastinar.</div>
+      </div>
+    </div>
+  );
+}
+
+// ============== Subcomponentes ==============
+function QuickAdd({ onAdd, label }: { onAdd: (title: string) => void; label: string }) {
+  const [val, setVal] = useState("");
+  return (
+    <div className="flex gap-2">
+      <Input value={val} onChange={(e)=>setVal(e.target.value)} placeholder={`${label} (Alt+N)`} />
+      <Button onClick={() => { if(val.trim()){ onAdd(val.trim()); setVal(""); } }}>{label}</Button>
+    </div>
+  );
+}
+
+function TaskRow({ task, toggle }: { task: Task; toggle: (id: string)=>void }) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-2xl border p-3">
+      <div className="flex items-start gap-3">
+        <Checkbox checked={task.done} onCheckedChange={() => toggle(task.id)} />
+        <div>
+          <div className="font-medium flex items-center gap-2">
+            {task.title}
+            {task.priority === 'high' && <Badge variant="destructive">HIGH</Badge>}
+          </div>
+          <div className="text-xs text-neutral-500">{task.project} · {task.estimateMin} min{task.dueDate ? ` · vence ${format(new Date(task.dueDate), 'dd/MM')}` : ''}</div>
+          {task.notes && <div className="text-xs text-neutral-700 mt-1">{task.notes}</div>}
+        </div>
+      </div>
+      <Badge>{task.points} pts</Badge>
+    </div>
+  );
+}
+
+function TaskForm({ onCreate, t }: { onCreate: (t: Omit<Task, "id" | "createdAt" | "done">) => void; t:any }) {
+  const [title, setTitle] = useState("");
+  const [project, setProject] = useState("Economía");
+  const [estimateMin, setEstimateMin] = useState(50);
+  const [points, setPoints] = useState(20);
+  const [dueDate, setDueDate] = useState<string | undefined>();
+  const [notes, setNotes] = useState("");
+  const [priority, setPriority] = useState<"low"|"med"|"high">("med");
+
+  function submit() {
+    if (!title.trim()) return;
+    onCreate({ title: title.trim(), project, estimateMin, points, notes: notes.trim() || undefined, dueDate: toISODate(dueDate), priority });
+    setTitle(""); setNotes(""); setEstimateMin(50); setPoints(20); setDueDate(undefined); setPriority("med");
+  }
+
+  return (
+    <CardContent className="space-y-3">
+      <div className="space-y-1">
+        <Label>{t.titleLbl}</Label>
+        <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej. C4.7: interpretar coeficientes" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <Label>{t.project}</Label>
+          <Select value={project} onValueChange={setProject}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Economía">Economía</SelectItem>
+              <SelectItem value="Investigación">Investigación</SelectItem>
+              <SelectItem value="Cursos">Cursos</SelectItem>
+              <SelectItem value="Legado Verde">Legado Verde</SelectItem>
+              <SelectItem value="Scouts">Scouts</SelectItem>
+              <SelectItem value="General">General</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label>{t.due}</Label>
+          <Input type="date" value={dueDate || ""} onChange={(e) => setDueDate(e.target.value)} />
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="space-y-1">
+          <Label>{t.estimate}</Label>
+          <Input type="number" min={5} step={5} value={estimateMin} onChange={(e) => setEstimateMin(parseInt(e.target.value || '0'))} />
+        </div>
+        <div className="space-y-1">
+          <Label>{t.points}</Label>
+          <Input type="number" min={5} step={5} value={points} onChange={(e) => setPoints(parseInt(e.target.value || '0'))} />
+        </div>
+        <div className="space-y-1">
+          <Label>Prioridad</Label>
+          <Select value={priority} onValueChange={(v)=>setPriority(v as any)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="low">Low</SelectItem>
+              <SelectItem value="med">Medium</SelectItem>
+              <SelectItem value="high">High</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="space-y-1">
+        <Label>{t.notes}</Label>
+        <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Definición de terminado" />
+      </div>
+      <Button className="w-full" onClick={submit}>{t.add}</Button>
+    </CardContent>
+  );
+}
+
+function GoalForm({ onCreate, t }: { onCreate: (g: Omit<Goal, "id" | "createdAt" | "history">) => void; t:any }) {
+  const [title, setTitle] = useState("");
+  const [project, setProject] = useState("Investigación");
+  const [targetUnits, setTargetUnits] = useState(100);
+  const [unitLabel, setUnitLabel] = useState("páginas");
+  const [dueDate, setDueDate] = useState<string | undefined>();
+
+  function submit() {
+    if (!title.trim()) return;
+    onCreate({ title: title.trim(), project, targetUnits, unitLabel, dueDate: toISODate(dueDate) });
+    setTitle(""); setTargetUnits(100); setUnitLabel("páginas"); setDueDate(undefined);
+  }
+
+  return (
+    <CardContent className="space-y-3">
+      <div className="space-y-1">
+        <Label>{t.titleLbl}</Label>
+        <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej. Paper redes: borrador 1" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <Label>{t.project}</Label>
+          <Select value={project} onValueChange={setProject}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Investigación">Investigación</SelectItem>
+              <SelectItem value="Economía">Economía</SelectItem>
+              <SelectItem value="Cursos">Cursos</SelectItem>
+              <SelectItem value="Legado Verde">Legado Verde</SelectItem>
+              <SelectItem value="Scouts">Scouts</SelectItem>
+              <SelectItem value="General">General</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label>{t.goalDate}</Label>
+          <Input type="date" value={dueDate || ""} onChange={(e) => setDueDate(e.target.value)} />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <Label>{t.goalUnits}</Label>
+          <Input type="number" min={1} step={1} value={targetUnits} onChange={(e) => setTargetUnits(parseInt(e.target.value || '0'))} />
+        </div>
+        <div className="space-y-1">
+          <Label>{t.unitLabel}</Label>
+          <Input value={unitLabel} onChange={(e) => setUnitLabel(e.target.value)} placeholder="páginas / ejercicios / horas" />
+        </div>
+      </div>
+      <Button className="w-full" onClick={submit}>{t.create}</Button>
+    </CardContent>
+  );
+}
+
+function ReviewForm({ onSubmit, t }: { onSubmit: (notes?: string) => void; t:any }) {
+  const [notes, setNotes] = useState("");
+  return (
+    <div className="space-y-3">
+      <Label>{t.notes}</Label>
+      <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Breve, honesto y sin drama." />
+      <Button onClick={() => onSubmit(notes.trim() || undefined)}>{t.save}</Button>
+    </div>
+  );
+}
+
+function GoalMiniChart({ goal, t }: { goal: Goal; t:any }) {
+  const data = useMemo(() => {
+    const map: Record<string, number> = {};
+    goal.history.forEach(h => {
+      const k = h.date.slice(0,10);
+      map[k] = (map[k] || 0) + h.units;
+    });
+    const now = new Date(todayISO());
+    const days = [...Array(21)].map((_,i) => {
+      const d = new Date(now);
+      d.setDate(now.getDate() - (20 - i));
+      const key = d.toISOString().slice(0,10);
+      return { date: format(d, 'dd/MM'), units: map[key] || 0 };
+    });
+    return days;
+  }, [goal.history]);
+
+  const totalDone = goal.history.reduce((a,b) => a + b.units, 0);
+  const pct = Math.min(100, Math.round((totalDone / Math.max(1, goal.targetUnits)) * 100));
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="md:col-span-2 h-28">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="date" />
+            <YAxis />
+            <Tooltip />
+            <Bar dataKey="units" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="flex flex-col items-center justify-center rounded-xl border p-3">
+        <div className="text-xs text-neutral-500">{t.progress}</div>
+        <div className="text-2xl font-bold">{pct}%</div>
+        <div className="text-xs text-neutral-500">{totalDone}/{goal.targetUnits} {goal.unitLabel}</div>
+      </div>
+    </div>
+  );
+}
+
+// ===== Semana =====
+function WeekPlan({ tasks, addTask, t }: { tasks: Task[]; addTask: (t: Omit<Task, 'id'|'createdAt'|'done'>)=>void; t:any }){
+  const days = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  const todayIdx = new Date().getDay(); // 0=Dom
+  function addQuick(dayOffset:number){
+    const title = prompt(`Tarea (${days[(todayIdx+6+dayOffset)%7]})`);
+    if(title){
+      const d = new Date(); d.setDate(d.getDate()+dayOffset);
+      addTask({ title, project:'General', estimateMin:30, points:20, dueDate: toISODate(d.toISOString()) });
+    }
+  }
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
+      {[...Array(7)].map((_,i)=>{
+        const d = new Date(); d.setDate(d.getDate() - ((todayIdx+6)%7) + i);
+        const key = d.toISOString().slice(0,10);
+        const dayTasks = tasks.filter(t=> (t.dueDate||'').slice(0,10)===key);
+        return (
+          <Card key={i}>
+            <CardHeader className="pb-2"><CardTitle className="text-base">{days[i]} · {format(d,'dd/MM')}</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              <Button variant="secondary" onClick={()=>addQuick(i-((todayIdx+6)%7))} className="w-full">{t.add}</Button>
+              <div className="space-y-2">
+                {dayTasks.map(x=> <div key={x.id} className="text-sm rounded-lg border p-2">{x.title}</div>)}
+                {dayTasks.length===0 && <div className="text-xs text-neutral-500">—</div>}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+// ===== Backlog =====
+function Backlog({ tasks, setTasks, t }: { tasks: Task[]; setTasks: React.Dispatch<React.SetStateAction<Task[]>>; t:any }){
+  const undone = tasks.filter(x=>!x.done).sort((a,b)=> (a.priority==="high"?0:1)-(b.priority==="high"?0:1));
+  function bump(id:string){ setTasks(prev=> prev.map(x=> x.id===id?{...x, priority: x.priority==='high'?'med':'high'}:x)); }
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <Card>
+        <CardHeader className="pb-2"><CardTitle>Criticas</CardTitle></CardHeader>
+        <CardContent className="space-y-2">
+          {undone.filter(x=>x.priority==='high').map(x=> <BLRow key={x.id} t={x} bump={bump} />)}
+          {undone.filter(x=>x.priority==='high').length===0 && <div className="text-sm text-neutral-500">Vacío</div>}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="pb-2"><CardTitle>Normales</CardTitle></CardHeader>
+        <CardContent className="space-y-2">
+          {undone.filter(x=>x.priority!=='high').map(x=> <BLRow key={x.id} t={x} bump={bump} />)}
+          {undone.filter(x=>x.priority!=='high').length===0 && <div className="text-sm text-neutral-500">Vacío</div>}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+function BLRow({ t, bump }:{ t:Task; bump:(id:string)=>void }){
+  return <div className="rounded-xl border p-2 text-sm flex items-center justify-between">
+    <div>
+      <div className="font-medium">{t.title}</div>
+      <div className="text-xs text-neutral-500">{t.project} · {t.estimateMin}min</div>
+    </div>
+    <Button variant="secondary" size="sm" onClick={()=>bump(t.id)}>{t.priority==='high'?'Bajar':'Priorizar'}</Button>
+  </div>;
+}
+
+// ===== Timer de enfoque =====
+function FocusTimer({ cfg, setCfg, t }: { cfg: Cfg; setCfg: (c: Cfg)=>void; t:any }){
+  const [mode, setMode] = useState<'focus'|'break'>('focus');
+  const [sec, setSec] = useState(cfg.focusBlockMin*60);
+  const intervalRef = useRef<number | null>(null);
+
+  function tick(){ setSec(s=> Math.max(0, s-1)); }
+  useEffect(()=>{ if(sec===0){
+    if(cfg.sound) playBeep();
+    if(cfg.notifications && 'Notification' in window && Notification.permission==='granted') new Notification(mode==='focus'?'Fin del bloque':'Fin del descanso');
+    const next = mode==='focus'?'break':'focus';
+    setMode(next); setSec((next==='focus'?cfg.focusBlockMin:cfg.breakMin)*60);
+  }}, [sec]);
+
+  function start(){ if(intervalRef.current) return; intervalRef.current = window.setInterval(tick, 1000); }
+  function pause(){ if(intervalRef.current){ clearInterval(intervalRef.current); intervalRef.current=null; } }
+  function reset(){ pause(); setMode('focus'); setSec(cfg.focusBlockMin*60); }
+
+  const mm = String(Math.floor(sec/60)).padStart(2,'0');
+  const ss = String(sec%60).padStart(2,'0');
+
+  return (
+    <Card>
+      <CardHeader className="pb-2 flex items-center justify-between">
+        <CardTitle className="flex items-center gap-2"><Timer className="h-5 w-5" />{t.pomodoro}</CardTitle>
+        <div className="text-xs text-neutral-500 flex items-center gap-2"><Bell className="h-4 w-4" />{t.allowNotif}: {cfg.notifications? 'On':'Off'}</div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="text-center">
+          <div className="text-5xl font-bold tracking-tight">{mm}:{ss}</div>
+          <div className="text-xs text-neutral-500">{mode==='focus'? t.focusBlock : t.break}</div>
+        </div>
+        <div className="flex gap-2 justify-center">
+          <Button onClick={start}>{t.start}</Button>
+          <Button variant="secondary" onClick={pause}>{t.pause}</Button>
+          <Button variant="ghost" onClick={reset}>{t.reset}</Button>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label>{t.focusBlock} (min)</Label>
+            <Input type="number" value={cfg.focusBlockMin} onChange={(e)=> setCfg({ ...cfg, focusBlockMin: Math.max(5, parseInt(e.target.value||'0')) })} />
+          </div>
+          <div className="space-y-1">
+            <Label>{t.break} (min)</Label>
+            <Input type="number" value={cfg.breakMin} onChange={(e)=> setCfg({ ...cfg, breakMin: Math.max(1, parseInt(e.target.value||'0')) })} />
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch checked={cfg.sound} onCheckedChange={(v)=> setCfg({ ...cfg, sound: !!v })} /> <Label>Sonido</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch checked={cfg.notifications} onCheckedChange={(v)=> setCfg({ ...cfg, notifications: !!v })} /> <Label>{t.allowNotif}</Label>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SettingsPane({ cfg, setCfg, exportAll, importAll, t }:{ cfg: Cfg; setCfg:(c:Cfg)=>void; exportAll:()=>void; importAll:(f:File)=>void; t:any }){
+  const fileRef = useRef<HTMLInputElement|null>(null);
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <Card>
+        <CardHeader className="pb-2"><CardTitle>Preferencias</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2"><Sun className="h-4 w-4" />{t.light} / <Moon className="h-4 w-4" />{t.dark}</div>
+            <Switch checked={cfg.theme==='dark'} onCheckedChange={(v)=> setCfg({ ...cfg, theme: v? 'dark':'light' })} />
+          </div>
+          <div className="space-y-1">
+            <Label>{t.language}</Label>
+            <Select value={cfg.lang} onValueChange={(v)=> setCfg({ ...cfg, lang: v as any })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="es">Español</SelectItem>
+                <SelectItem value="en">English</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2"><CardTitle>Datos</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-2">
+            <Button onClick={exportAll} className="flex items-center gap-2"><Download className="h-4 w-4" /> {t.export}</Button>
+            <input type="file" ref={fileRef} className="hidden" accept="application/json" onChange={(e)=>{ const f=e.target.files?.[0]; if(f) importAll(f); }} />
+            <Button variant="secondary" onClick={()=> fileRef.current?.click()} className="flex items-center gap-2"><Upload className="h-4 w-4" /> {t.import}</Button>
+          </div>
+          <div className="text-xs text-neutral-500 flex items-center gap-2"><Keyboard className="h-4 w-4" />Atajos: Alt+N tarea rápida, Alt+D calificar día.</div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function ThemeToggle({ cfg, setCfg, t }:{ cfg: Cfg; setCfg:(c:Cfg)=>void; t:any }){
+  return (
+    <div className="flex items-center gap-2">
+      <Select value={cfg.lang} onValueChange={(v)=> setCfg({ ...cfg, lang: v as any })}>
+        <SelectTrigger className="h-8 w-[110px]"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="es">Español</SelectItem>
+          <SelectItem value="en">English</SelectItem>
+        </SelectContent>
+      </Select>
+      <Button variant="secondary" size="icon" onClick={()=> setCfg({ ...cfg, theme: cfg.theme==='dark'?'light':'dark' })}>{cfg.theme==='dark'? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</Button>
+    </div>
+  );
+}
+
+function Templates({
+  addTask,
+  addGoal,
+}: {
+  addTask: (t: Omit<Task, "id" | "createdAt" | "done">) => void;
+  addGoal: (g: Omit<Goal, "id" | "createdAt" | "history">) => void;
+}) {
+  // Helpers rápidos
+  const addExamPack = () => {
+    addTask({
+      title: "Repaso temario completo",
+      project: "Economía",
+      estimateMin: 90,
+      points: 40,
+      priority: "high",
+    });
+    addTask({
+      title: "Resolver 3 exámenes pasados",
+      project: "Economía",
+      estimateMin: 120,
+      points: 40,
+      priority: "high",
+    });
+    addTask({
+      title: "Checklist materiales",
+      project: "General",
+      estimateMin: 15,
+      points: 10,
+      priority: "med",
+    });
+  };
+
+  const addResearchPack = () => {
+    addGoal({
+      title: "Borrador sección Métodos",
+      project: "Investigación",
+      targetUnits: 5,
+      unitLabel: "páginas",
+    });
+    addTask({
+      title: "Leer 2 papers clave y anotar ideas",
+      project: "Investigación",
+      estimateMin: 60,
+      points: 30,
+      priority: "med",
+    });
+    addTask({
+      title: "Escribir 2 páginas del borrador",
+      project: "Investigación",
+      estimateMin: 60,
+      points: 30,
+      priority: "high",
+    });
+  };
+
+  const addCoursePack = () => {
+    addGoal({
+      title: "Terminar módulo actual",
+      project: "Cursos",
+      targetUnits: 3,
+      unitLabel: "lecciones",
+    });
+    addTask({
+      title: "Ver 1 lección y tomar notas",
+      project: "Cursos",
+      estimateMin: 45,
+      points: 20,
+      priority: "med",
+    });
+    addTask({
+      title: "Resolver ejercicios del módulo",
+      project: "Cursos",
+      estimateMin: 45,
+      points: 20,
+      priority: "med",
+    });
+  };
+
+  const addBaseDay33 = () => {
+    // 3 tareas: una high, una med, una low. Tu mínima dignidad diaria.
+    addTask({
+      title: "Tarea crítica del día",
+      project: "General",
+      estimateMin: 60,
+      points: 40,
+      priority: "high",
+    });
+    addTask({
+      title: "Avance en meta principal (+1 unidad)",
+      project: "Investigación",
+      estimateMin: 40,
+      points: 25,
+      priority: "med",
+    });
+    addTask({
+      title: "Mantenimiento del sistema (archivos/orden)",
+      project: "General",
+      estimateMin: 15,
+      points: 10,
+      priority: "low",
+    });
+  };
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle>Pack: Día base 3×3</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-sm text-neutral-500">
+            Tres tareas: una crítica, una de avance real, una de mantenimiento.
+          </p>
+          <Button className="w-full" onClick={addBaseDay33}>
+            Cargar
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle>Pack: Examen</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-sm text-neutral-500">
+            Enfoque total y práctica dura. Sin autoengaño.
+          </p>
+          <Button className="w-full" onClick={addExamPack}>
+            Cargar
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle>Pack: Investigación</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-sm text-neutral-500">
+            Lectura con notas y páginas escritas hoy.
+          </p>
+          <Button className="w-full" onClick={addResearchPack}>
+            Cargar
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle>Pack: Cursos</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-sm text-neutral-500">
+            Avanza módulos sin acumular “lo veo luego”.
+          </p>
+          <Button className="w-full" onClick={addCoursePack}>
+            Cargar
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
