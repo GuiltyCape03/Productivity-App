@@ -1,10 +1,4 @@
 Summary of updates:
-- Refreshed the dashboard with animated gradients, richer task cards, granular filters, bulk importers, and in-place editing for tasks and goals.
-- Expanded templates into configurable packs with intensity, project targeting, and due-date controls so routines load with one click.
-- Added history management, project administration, and enhanced settings to keep the workspace organized and responsive to daily focus.
-- Introduced a Notion-style workspace with AI-ready templates, block editing, and prettier dialogs for tasks, goals, and bulk import flows.
-- Added a Google Calendar connector with OAuth credentials, timeline visualization, and proactive status messaging so schedules stay in sync.
-- Introduced a configurable surface system with radius, glass/solid/gradient modes, and accent palettes plus editable default/support project names.
-- Shipped a project-aware chatbot that summarizes focus, deadlines, and goal progress while offering quick stats and bilingual responses.
-- Extended surface customization with adjustable shadows, field treatments, and dialog tones so every card, dialog, and form respects the selected aesthetic.
-- Refined task filters, bulk dialogs, and the chatbot workspace to use the new surfaces and surface tokens, adding active-project snapshots and smarter project-level replies.
+- Reemplazamos el componente monolítico por un dashboard modular con proveedores de estado y paneles por dominio.
+- Añadimos un motor de IA reutilizable y un chatbot consciente de proyectos que genera planes diarios y responde dudas.
+- Renovamos la interfaz con tarjetas configurables, workspace tipo Notion, conexión simulada a Google Calendar y panel de preferencias.
