@@ -1,0 +1,4 @@
+Summary of updates:
+- Refreshed the dashboard with animated gradients, richer task cards, granular filters, bulk importers, and in-place editing for tasks and goals.
+- Expanded templates into configurable packs with intensity, project targeting, and due-date controls so routines load with one click.
+- Added history management, project administration, and enhanced settings to keep the workspace organized and responsive to daily focus.
