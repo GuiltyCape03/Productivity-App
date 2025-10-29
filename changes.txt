@@ -1,4 +1,4 @@
 Summary of updates:
-- Added an AI coach tab that diagnoses the day, prioritizes tasks and goals, and lets you adopt the suggested focus plan in one click.
-- Highlighted the tasks selected by the AI engine across the app and stored the daily focus snapshot for easy reference.
-- Exposed configuration for daily capacity and minimum focus tasks, powering smarter recommendations across languages.
+- Refreshed the dashboard with animated gradients, richer task cards, granular filters, bulk importers, and in-place editing for tasks and goals.
+- Expanded templates into configurable packs with intensity, project targeting, and due-date controls so routines load with one click.
+- Added history management, project administration, and enhanced settings to keep the workspace organized and responsive to daily focus.
