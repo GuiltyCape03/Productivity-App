@@ -1,0 +1,4 @@
+Summary of updates:
+- Added persistent project catalog with support for custom names from the UI.
+- Updated task and goal forms to create/select projects without editing code, including localized prompts.
+- Synced quick add and weekly planning helpers to honor the current default project selection.
