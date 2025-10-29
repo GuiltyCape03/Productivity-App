@@ -13,11 +13,10 @@ interface AppShellProps {
   goals: React.ReactNode;
   workspace: React.ReactNode;
   calendar: React.ReactNode;
-  ai: React.ReactNode;
   preferences: React.ReactNode;
 }
 
-export function AppShell({ tasks, goals, workspace, calendar, ai, preferences }: AppShellProps) {
+export function AppShell({ tasks, goals, workspace, calendar, preferences }: AppShellProps) {
   const { snapshot } = useDashboard();
   useSyncPreferences();
 
@@ -83,8 +82,8 @@ export function AppShell({ tasks, goals, workspace, calendar, ai, preferences }:
         </section>
         <aside className="col-span-12 space-y-6 xl:col-span-4" aria-label="Seguimiento y copiloto">
           {calendar}
-          <div className="glass-panel p-1">
-            <div className="rounded-[26px] border border-border/50 bg-surface-elevated/80 p-6 shadow-card">
+          <div className="glass-panel rounded-3xl border border-border/40 p-1">
+            <div className="rounded-[26px] border border-border/40 bg-surface-elevated/70 p-6 shadow-card">
               {ai}
             </div>
           </div>

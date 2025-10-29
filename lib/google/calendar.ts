@@ -6,8 +6,21 @@ export interface CalendarAuthState {
   expiresAt?: string;
 }
 
-export function isCalendarConnected(auth?: CalendarAuthState) {
-  return Boolean(auth?.token && auth?.email);
+export type CalendarState =
+  | CalendarAuthState
+  | {
+      accountEmail: string;
+      lastSynced?: string;
+      status: "connected" | "error" | "connecting";
+      error?: string;
+    };
+
+export function isCalendarConnected(auth?: CalendarState) {
+  if (!auth) return false;
+  if ("status" in auth) {
+    return auth.status === "connected";
+  }
+  return Boolean((auth as CalendarAuthState).token && (auth as CalendarAuthState).email);
 }
 
 export async function fetchGoogleEvents(auth: CalendarAuthState): Promise<CalendarEvent[]> {

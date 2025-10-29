@@ -1,87 +1,81 @@
+// app/api/chat/route.ts
 import OpenAI from "openai";
 
-const MODEL = process.env.OPENAI_MODEL ?? "gpt-5";
+export const runtime = "nodejs"; // importante: usar Node.js para leer variables de entorno
 
-interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
+type Msg = { role: "user" | "assistant" | "system"; content: string };
+
+function envOrDefault(name: string, def?: string) {
+  const v = process.env[name];
+  return (v && v.trim().length > 0) ? v : def;
 }
 
-interface ChatRequestBody {
-  messages: ChatMessage[];
-  project?: string | null;
+const MODEL = envOrDefault("OPENAI_MODEL", "gpt-5")!;
+const TEMPERATURE = Number(envOrDefault("OPENAI_TEMPERATURE", "0.7"));
+const MAX_OUTPUT_TOKENS = Number(envOrDefault("OPENAI_MAX_OUTPUT_TOKENS", "800"));
+
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+function badRequest(msg: string) {
+  return new Response(JSON.stringify({ error: msg }), {
+    status: 400,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
-const textEncoder = new TextEncoder();
-
-function streamError(message: string) {
-  return new Response(
-    new ReadableStream({
-      start(controller) {
-        controller.enqueue(textEncoder.encode(`data: ${JSON.stringify({ error: message })}\n\n`));
-        controller.enqueue(textEncoder.encode("data: [DONE]\n\n"));
-        controller.close();
-      }
-    }),
-    {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache, no-transform",
-        Connection: "keep-alive"
-      },
-      status: 500
-    }
-  );
-}
-
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   if (!process.env.OPENAI_API_KEY) {
-    return streamError("OPENAI_API_KEY no configurada en el servidor.");
+    return badRequest("Falta OPENAI_API_KEY en .env.local");
   }
 
-  let payload: ChatRequestBody;
+  let body: { messages?: Msg[]; project?: string } = {};
   try {
-    payload = (await request.json()) as ChatRequestBody;
+    body = await req.json();
   } catch {
-    return streamError("Solicitud inválida: JSON no válido.");
+    return badRequest("JSON inválido");
   }
 
-  const messages = Array.isArray(payload.messages) ? payload.messages.slice(-12) : [];
-  if (messages.length === 0) {
-    return streamError("Solicitud inválida: se requieren mensajes.");
-  }
+  const project = body.project ?? "Todos los proyectos";
+  const messages = Array.isArray(body.messages) ? body.messages : [];
 
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const today = new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" });
-  const projectLabel = payload.project ? `Proyecto activo: ${payload.project}.` : "Sin proyecto seleccionado.";
+  // Sanitiza y limita el historial (memoria corta)
+  const trimmed: Msg[] = messages
+    .filter(m => m && typeof m.content === "string" && typeof m.role === "string")
+    .slice(-12);
 
+  const system: Msg = {
+    role: "system",
+    content:
+      `Eres un coach de productividad claro y directo. Responde en español. ` +
+      `Evita repetición; da recomendaciones accionables en 3–6 frases. ` +
+      `Usa bloques 50/10 cuando sea útil. Proyecto activo: ${project}.`,
+  };
+
+  // Usamos el cliente Chat Completions disponible en la versión actual del SDK
   try {
-    const stream = await client.responses.stream({
+    const chatResponse = await client.chat.completions.create({
       model: MODEL,
-      input: [
-        {
-          role: "system",
-          content: `Eres NeuralDesk, un copiloto de productividad bilingüe. Responde en español con tono profesional y cálido. Ofrece diagnóstico breve, bloques de trabajo de 50/10 y recordatorios accionables.
-Fecha: ${today}.
-${projectLabel}
-Considera el contexto del usuario: tareas, metas y calendario gestionados desde la app.`
-        },
-        ...messages.map((message) => ({ role: message.role, content: message.content }))
+      messages: [
+        { role: system.role, content: system.content },
+        ...trimmed.map((m) => ({ role: m.role, content: m.content }))
       ],
-      temperature: 0.7,
-      top_p: 0.9,
-      max_output_tokens: 800
+      temperature: TEMPERATURE,
+      max_tokens: MAX_OUTPUT_TOKENS,
     });
 
-    return new Response(stream.toReadableStream(), {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache, no-transform",
-        Connection: "keep-alive"
-      }
+    // Extraemos texto de la primera elección
+    const text = chatResponse.choices?.[0]?.message?.content ?? "";
+
+    return new Response(JSON.stringify({ output: text }), {
+      headers: { "Content-Type": "application/json" },
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Error desconocido al contactar a OpenAI.";
-    return streamError(message);
+  } catch (err: any) {
+    const msg = err?.message ?? "Fallo al contactar OpenAI";
+    return new Response(JSON.stringify({ error: msg }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }

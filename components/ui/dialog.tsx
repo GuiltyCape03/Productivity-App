@@ -1,7 +1,7 @@
 "use client";
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { forwardRef, type ComponentPropsWithoutRef, type HTMLAttributes, type HTMLHeadingElement, type HTMLParagraphElement } from "react";
+import { forwardRef, type ComponentPropsWithoutRef, type HTMLAttributes } from "react";
 import { cn } from "@/styles/utils";
 
 export const Dialog = DialogPrimitive.Root;

@@ -1,11 +1,10 @@
 "use client";
 
-import { DashboardProvider } from "@/modules/dashboard/DashboardProvider";
 import { PreferencesPanel } from "@/modules/preferences/PreferencesPanel";
 import { useSyncPreferences } from "@/modules/dashboard/useSyncPreferences";
 import { PageLayout } from "@/components/layout/PageLayout";
 
-function PreferencesContent() {
+export default function PreferencesPage() {
   useSyncPreferences();
   return (
     <PageLayout
@@ -15,13 +14,5 @@ function PreferencesContent() {
     >
       <PreferencesPanel />
     </PageLayout>
-  );
-}
-
-export default function PreferencesPage() {
-  return (
-    <DashboardProvider>
-      <PreferencesContent />
-    </DashboardProvider>
   );
 }

@@ -21,9 +21,9 @@ export function PageView({ id }: PageViewProps) {
       <div className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center gap-4 px-6 text-center">
         <p className="text-2xl font-semibold text-foreground">Página no encontrada</p>
         <p className="text-sm text-foreground-muted">Regresa al workspace para crear o seleccionar otra página.</p>
-        <Button asChild>
-          <Link href="/">Volver al dashboard</Link>
-        </Button>
+        <Link href="/">
+          <Button>Volver al dashboard</Button>
+        </Link>
       </div>
     );
   }

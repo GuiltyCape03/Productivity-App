@@ -195,13 +195,13 @@ export function generateAssistantReply(
 
   persistLastHash(projectKey, hash);
 
-  const updatedMemory: MemoryTurn[] = [
+  const updatedMemory: MemoryTurn[] = ([
     ...memory,
     ...(question
-      ? [{ role: "user", content: question, timestamp: new Date().toISOString() } as MemoryTurn]
+      ? [{ role: "user" as const, content: question, timestamp: new Date().toISOString() }]
       : []),
-    { role: "assistant", content: reply, timestamp: new Date().toISOString() }
-  ].slice(-10);
+    { role: "assistant" as const, content: reply, timestamp: new Date().toISOString() }
+  ] as MemoryTurn[]).slice(-10);
   persistMemory(projectKey, updatedMemory);
 
   return reply;

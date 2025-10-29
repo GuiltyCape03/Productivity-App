@@ -89,12 +89,11 @@ function SortableTabTrigger({
           ? "border-accent-primary/60 bg-accent-primary/15 shadow-card"
           : "border-border/60 bg-surface-elevated/70 hover:bg-surface-elevated/90"
       )}
-      onDoubleClick={onRenameStart}
-      onContextMenu={onContextMenu}
-      role="tab"
-      aria-selected={isActive}
-      {...attributes}
-      {...listeners}
+  onDoubleClick={onRenameStart}
+  onContextMenu={onContextMenu}
+  aria-selected={isActive}
+  {...attributes}
+  {...listeners}
     >
       <button
         type="button"
@@ -216,8 +215,8 @@ export function TabBar() {
   useEffect(() => {
     if (!activeId) return;
     const activeTab = tabs.find((tab) => tab.id === activeId);
-    if (activeTab && currentRoute !== activeTab.route) {
-      router.replace(activeTab.route);
+        if (activeTab && currentRoute !== activeTab.route) {
+      router.replace(activeTab.route as unknown as any);
     }
   }, [activeId, tabs, router, currentRoute]);
 
@@ -241,13 +240,13 @@ export function TabBar() {
     (preset: WorkspaceTab) => {
       const existing = tabs.find((tab) => tab.route === preset.route);
       if (existing) {
-        setActive(existing.id);
-        router.push(existing.route);
+  setActive(existing.id);
+  router.push(existing.route as unknown as any);
         return;
       }
-      add({ ...preset, id: preset.id });
-      setActive(preset.id);
-      router.push(preset.route);
+  add({ ...preset, id: preset.id });
+  setActive(preset.id);
+  router.push(preset.route as unknown as any);
     },
     [add, router, setActive, tabs]
   );
@@ -258,9 +257,9 @@ export function TabBar() {
     const id = `tab-${Date.now().toString(36)}`;
     const route = `/workspace?tab=${id}`;
     const tab: WorkspaceTab = { id, title, icon, route };
-    add(tab);
-    setActive(id);
-    router.push(route);
+  add(tab);
+  setActive(id);
+  router.push(route as unknown as any);
     setComposerOpen(false);
     setComposerTitle("Página sin título");
     setComposerEmoji("🗒️");
@@ -335,9 +334,9 @@ export function TabBar() {
                   }}
                   onRenameStart={() => setRenamingId(tab.id)}
                   onRenameCancel={() => setRenamingId(null)}
-                  onOpen={() => {
+                    onOpen={() => {
                     setActive(tab.id);
-                    router.push(tab.route);
+                    router.push(tab.route as unknown as any);
                   }}
                   onContextMenu={(event) => openContextMenu(tab.id, event)}
                 />

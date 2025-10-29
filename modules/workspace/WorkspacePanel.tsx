@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import type { Route } from "next"; // 👈 IMPORTANTE
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +26,6 @@ const BLOCK_TYPES = [
 ];
 
 type BlockType = WorkspacePage["blocks"][number]["type"];
-
 type DraftBlock = WorkspacePage["blocks"][number];
 
 const EMOJI_SUGGESTIONS = ["✨", "🚀", "🧠", "📚", "🗂️", "🧭", "🎯", "🛠️"];
@@ -197,14 +197,16 @@ export function WorkspacePanel() {
   const handleOpenNewTab = (id: string) => {
     const page = pages.find((item) => item.id === id);
     if (!page) return;
-    const route = `/workspace/${id}`;
-    const existing = tabs.find((tab) => tab.route === route);
+
+    const existing = tabs.find((tab) => tab.route === `/workspace/${id}`);
     if (existing) {
       setActiveTab(existing.id);
-      router.push(existing.route);
+      router.push(existing.route as Route); // 👈 cast para typedRoutes
       return;
     }
+
     const tabId = `workspace-${id}`;
+    const route = `/workspace/${id}` as Route; // 👈 tipa la ruta
     addTab({
       id: tabId,
       title: page.title,
@@ -213,7 +215,7 @@ export function WorkspacePanel() {
       project: page.projectId ?? undefined
     });
     setActiveTab(tabId);
-    router.push(route);
+    router.push(route); // 👈 route ya es Route
   };
 
   const updateDraft = (updater: (prev: WorkspacePage) => WorkspacePage) => {
