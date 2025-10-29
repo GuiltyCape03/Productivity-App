@@ -7,9 +7,9 @@ export interface MemoryTurn {
   timestamp: string;
 }
 
-const MEMORY_PREFIX = "neuraldesk.ai.memory.";
-const LAST_PREFIX = "neuraldesk.ai.last.";
-const CHAT_HISTORY_PREFIX = "nd.chat.v1.";
+const memoryStore = new Map<string, MemoryTurn[]>();
+const lastHashStore = new Map<string, string>();
+const chatStore = new Map<string, ChatHistoryTurn[]>();
 
 function normaliseProjectKey(projectId: string | null | undefined) {
   return projectId ?? "inbox";
@@ -25,16 +25,7 @@ function simpleHash(payload: string) {
 }
 
 function loadMemory(projectId: string) {
-  if (typeof window === "undefined") return [] as MemoryTurn[];
-  try {
-    const raw = window.localStorage.getItem(`${MEMORY_PREFIX}${projectId}`);
-    if (!raw) return [] as MemoryTurn[];
-    const parsed = JSON.parse(raw) as MemoryTurn[];
-    return parsed.slice(-10);
-  } catch (error) {
-    console.warn("No se pudo leer la memoria de la IA", error);
-    return [] as MemoryTurn[];
-  }
+  return memoryStore.get(projectId)?.slice(-10) ?? [];
 }
 
 export function loadAssistantMemory(projectId: string | null | undefined) {
@@ -42,24 +33,21 @@ export function loadAssistantMemory(projectId: string | null | undefined) {
 }
 
 function persistMemory(projectId: string, turns: MemoryTurn[]) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(`${MEMORY_PREFIX}${projectId}`, JSON.stringify(turns.slice(-10)));
-  } catch (error) {
-    console.warn("No se pudo guardar la memoria de la IA", error);
-  }
+  memoryStore.set(projectId, turns.slice(-10));
+}
+
+export function resetAssistantMemory(projectId: string | null | undefined) {
+  memoryStore.delete(normaliseProjectKey(projectId));
 }
 
 function getLastHash(projectId: string) {
-  if (typeof window === "undefined") return undefined;
   const today = new Date().toISOString().slice(0, 10);
-  return window.localStorage.getItem(`${LAST_PREFIX}${projectId}.${today}`) ?? undefined;
+  return lastHashStore.get(`${projectId}.${today}`);
 }
 
 function persistLastHash(projectId: string, hash: string) {
-  if (typeof window === "undefined") return;
   const today = new Date().toISOString().slice(0, 10);
-  window.localStorage.setItem(`${LAST_PREFIX}${projectId}.${today}`, hash);
+  lastHashStore.set(`${projectId}.${today}`, hash);
 }
 
 export interface ChatHistoryTurn {
@@ -69,25 +57,11 @@ export interface ChatHistoryTurn {
 }
 
 function loadChat(projectId: string) {
-  if (typeof window === "undefined") return [] as ChatHistoryTurn[];
-  try {
-    const raw = window.localStorage.getItem(`${CHAT_HISTORY_PREFIX}${projectId}`);
-    if (!raw) return [] as ChatHistoryTurn[];
-    const parsed = JSON.parse(raw) as ChatHistoryTurn[];
-    return Array.isArray(parsed) ? parsed.slice(-50) : [];
-  } catch (error) {
-    console.warn("No se pudo leer el historial del chat", error);
-    return [] as ChatHistoryTurn[];
-  }
+  return chatStore.get(projectId)?.slice(-10) ?? [];
 }
 
 function persistChat(projectId: string, turns: ChatHistoryTurn[]) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(`${CHAT_HISTORY_PREFIX}${projectId}`, JSON.stringify(turns.slice(-50)));
-  } catch (error) {
-    console.warn("No se pudo guardar el historial del chat", error);
-  }
+  chatStore.set(projectId, turns.slice(-10));
 }
 
 export function loadChatHistory(projectId: string | null | undefined) {
@@ -96,6 +70,16 @@ export function loadChatHistory(projectId: string | null | undefined) {
 
 export function persistChatHistory(projectId: string | null | undefined, turns: ChatHistoryTurn[]) {
   persistChat(normaliseProjectKey(projectId), turns);
+}
+
+export function resetChatHistory(projectId: string | null | undefined) {
+  chatStore.delete(normaliseProjectKey(projectId));
+}
+
+export function clearAllChatHistory() {
+  chatStore.clear();
+  memoryStore.clear();
+  lastHashStore.clear();
 }
 
 function pickOpener(sentiment: "steady" | "overloaded" | "stretch", index: number) {
