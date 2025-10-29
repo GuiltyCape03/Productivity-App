@@ -4,7 +4,12 @@ import { cn } from "@/styles/utils";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
-const emoji = Noto_Color_Emoji({ subsets: ["emoji"], variable: "--font-emoji" });
+// Noto Color Emoji only has weight 400
+const emoji = Noto_Color_Emoji({ 
+  subsets: ["emoji"],
+  variable: "--font-emoji",
+  weight: "400"  // Required even though it's the only option
+});
 
 export const metadata: Metadata = {
   title: "NeuralDesk",
