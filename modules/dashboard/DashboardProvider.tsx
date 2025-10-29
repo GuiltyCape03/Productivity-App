@@ -31,6 +31,7 @@ interface DashboardContextValue extends DashboardState {
   updatePreferences: (updates: Partial<DashboardPreferences>) => void;
   refreshSnapshot: () => void;
   recordCalendarState: (payload: DashboardState["connectedCalendar"] | undefined) => void;
+  resetAllState: () => void;
 }
 
 const STORAGE_KEY = "neuraldesk.dashboard.v1";
@@ -424,6 +425,24 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     }));
   }, [setState]);
 
+  const resetAllState = useCallback(() => {
+    dispatch({ type: "set", payload: () => initialState });
+    if (typeof window !== "undefined") {
+      const storage = window.localStorage;
+      storage.removeItem(STORAGE_KEY);
+      storage.removeItem(ACTIVE_PROJECT_KEY);
+      const removableKeys: string[] = [];
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        if (!key) continue;
+        if (key.startsWith(TASK_STORAGE_PREFIX) || key.startsWith(GOAL_STORAGE_PREFIX)) {
+          removableKeys.push(key);
+        }
+      }
+      removableKeys.forEach((key) => storage.removeItem(key));
+    }
+  }, []);
+
   const value = useMemo<DashboardContextValue>(() => ({
     ...state,
     addTask,
@@ -441,7 +460,8 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     addEvent,
     updatePreferences,
     refreshSnapshot,
-    recordCalendarState
+    recordCalendarState,
+    resetAllState
   }), [
     state,
     addTask,
@@ -459,7 +479,8 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     addEvent,
     updatePreferences,
     refreshSnapshot,
-    recordCalendarState
+    recordCalendarState,
+    resetAllState
   ]);
 
   return <DashboardContext.Provider value={value}>{children}</DashboardContext.Provider>;

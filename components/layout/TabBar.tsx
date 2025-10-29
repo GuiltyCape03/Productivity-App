@@ -317,8 +317,8 @@ export function TabBar() {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/40 bg-surface-base/70 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-7xl items-center gap-3 px-6 py-4 md:px-12">
+    <header className="sticky top-[72px] z-30 border-b border-border/40 bg-surface-base/80 backdrop-blur-xl md:top-0">
+      <div className="mx-auto flex w-full max-w-7xl items-center gap-3 px-4 py-4 sm:px-8">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={items} strategy={horizontalListSortingStrategy}>
             <div className="flex flex-1 flex-wrap items-center gap-2">

@@ -4,52 +4,39 @@
 
 :root {
   color-scheme: dark;
-  --surface-base: #0f1725;
-  --surface-elevated: rgba(23, 33, 48, 0.78);
-  --surface-muted: rgba(99, 121, 162, 0.26);
-  --surface-overlay: rgba(30, 43, 63, 0.55);
+  --surface-base: #0c111f;
+  --surface-elevated: rgba(22, 28, 44, 0.9);
+  --surface-muted: rgba(88, 101, 132, 0.28);
+  --surface-overlay: rgba(32, 41, 62, 0.55);
   --surface-border: rgba(148, 163, 184, 0.18);
-  --foreground-strong: #f6f7fb;
-  --foreground-muted: #c2c9d6;
-  --accent-primary: #5b8def;
-  --accent-secondary: #4fd1c5;
+  --foreground: #f5f7fb;
+  --foreground-muted: #aeb7c9;
+  --foreground-subtle: #7c8499;
+  --accent-primary: #5b87ff;
+  --accent-secondary: #36d0c7;
   --accent-danger: #fb7185;
-  --radius-base: 20px;
-  --card-padding-x: 1.8rem;
-  --card-padding-y: 1.8rem;
+  --glass-blur: 18px;
+  --shadow-card: 0 24px 48px rgba(11, 16, 28, 0.28);
+  --radius-lg: 1.5rem;
   --grid-gap: 2.5rem;
   --grid-columns: repeat(12, minmax(0, 1fr));
-  --shadow-card: 0 18px 40px rgba(15, 23, 42, 0.18);
-  --transition-base: 220ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --surface-base: #f3f5fb;
-  --surface-elevated: rgba(255, 255, 255, 0.82);
-  --surface-muted: rgba(180, 189, 209, 0.35);
+  --surface-base: #f5f7fb;
+  --surface-elevated: rgba(255, 255, 255, 0.86);
+  --surface-muted: rgba(153, 168, 193, 0.28);
   --surface-overlay: rgba(255, 255, 255, 0.68);
   --surface-border: rgba(15, 23, 42, 0.08);
-  --foreground-strong: #0c1424;
-  --foreground-muted: #5a6275;
+  --foreground: #111827;
+  --foreground-muted: #5b6275;
+  --foreground-subtle: #798096;
   --accent-primary: #4f46ef;
   --accent-secondary: #0ea5a4;
   --accent-danger: #e11d48;
-}
-
-body[data-density="comfortable"] {
-  --card-padding-x: 1.6rem;
-  --card-padding-y: 1.6rem;
-}
-
-body[data-density="cozy"] {
-  --card-padding-x: 1.4rem;
-  --card-padding-y: 1.35rem;
-}
-
-body[data-density="compact"] {
-  --card-padding-x: 1.1rem;
-  --card-padding-y: 1.1rem;
+  --shadow-card: 0 24px 64px rgba(15, 23, 42, 0.12);
 }
 
 html {
@@ -57,22 +44,28 @@ html {
 }
 
 body {
-  background: radial-gradient(circle at top, rgba(91, 141, 239, 0.16), transparent 58%),
-    radial-gradient(circle at bottom right, rgba(79, 209, 197, 0.16), transparent 56%),
+  background:
+    radial-gradient(circle at top left, rgba(91, 135, 255, 0.18), transparent 55%),
+    radial-gradient(circle at bottom right, rgba(14, 165, 164, 0.16), transparent 60%),
     var(--surface-base);
-  color: var(--foreground-strong);
+  color: var(--foreground);
   font-feature-settings: "cv02", "cv03", "ss01";
   font-family: var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   min-height: 100vh;
-  font-size: 15.8px;
-  line-height: 1.65;
-  transition: background-color var(--transition-base), color var(--transition-base);
+  font-size: 16px;
+  line-height: 1.6;
+  transition: background-color var(--transition-base), color var(--transition-base),
+    border-color var(--transition-base), opacity var(--transition-base);
 }
 
-* {
+body * {
   border-color: var(--surface-border);
   transition: background-color var(--transition-base), border-color var(--transition-base), color var(--transition-base),
     opacity var(--transition-base);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display), var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 .emoji {
@@ -94,10 +87,40 @@ body {
 }
 
 @layer utilities {
-  .bg-radial-hero {
+  .layout-grid {
+    display: grid;
+    grid-template-columns: var(--grid-columns);
+    gap: var(--grid-gap);
+  }
+
+  .glass-panel {
+    background-color: var(--surface-overlay);
+    backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+    box-shadow: var(--shadow-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid color-mix(in srgb, var(--surface-border) 55%, transparent);
+  }
+
+  .bg-grid {
     background-image:
-      radial-gradient(circle at top, rgba(14, 165, 164, 0.18), transparent 58%),
-      radial-gradient(circle at bottom, rgba(124, 58, 237, 0.15), transparent 60%);
+      linear-gradient(to right, rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+}
+
+@keyframes typing {
+  0% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
   }
 
   .layout-grid {

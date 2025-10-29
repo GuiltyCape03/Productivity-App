@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -9,7 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { STRINGS } from "@/i18n/strings";
 import { useDashboard } from "@/modules/dashboard/DashboardProvider";
 import { buildSnapshot } from "@/lib/ai/snapshot";
-import { generateAssistantReply, loadAssistantMemory, type MemoryTurn } from "@/lib/ai/chat";
+import {
+  generateAssistantReply,
+  loadAssistantMemory,
+  resetAssistantMemory,
+  type MemoryTurn
+} from "@/lib/ai/chat";
 
 function formatTimestamp(timestamp: string) {
   const date = new Date(timestamp);
@@ -35,10 +40,31 @@ export function AiCoachPanel() {
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<MemoryTurn[]>(() => loadAssistantMemory(activeProjectId));
   const [isThinking, setIsThinking] = useState(false);
+  const streamTimeout = useRef<number | null>(null);
+  const summaryRef = useRef(storedSnapshot?.summary ?? "");
 
   useEffect(() => {
-    setMessages(loadAssistantMemory(activeProjectId));
+    resetAssistantMemory(activeProjectId);
+    setMessages([]);
   }, [activeProjectId]);
+
+  useEffect(() => {
+    const summary = storedSnapshot?.summary ?? "";
+    if (messages.length > 0 && summary && summary !== summaryRef.current) {
+      resetAssistantMemory(activeProjectId);
+      setMessages([]);
+    }
+    summaryRef.current = summary;
+  }, [activeProjectId, messages.length, storedSnapshot?.summary]);
+
+  useEffect(() => {
+    return () => {
+      if (streamTimeout.current) {
+        window.clearTimeout(streamTimeout.current);
+        streamTimeout.current = null;
+      }
+    };
+  }, []);
 
   const baseState = useMemo(
     () => ({
@@ -72,6 +98,28 @@ export function AiCoachPanel() {
   const capacity = snapshot?.capacityMin ?? 0;
   const habits = snapshot?.suggestedHabits ?? [];
 
+  const simulateStreaming = (fullText: string) => {
+    const chunks = fullText.split(/(?<=[.!?])\s+/).filter(Boolean);
+    let current = "";
+    const runChunk = (index: number) => {
+      if (index >= chunks.length) {
+        setIsThinking(false);
+        setMessages(loadAssistantMemory(activeProjectId));
+        return;
+      }
+      current = current ? `${current} ${chunks[index]}` : chunks[index];
+      setMessages((prev) => {
+        if (prev.length === 0) return prev;
+        const next = prev.slice();
+        const last = next[next.length - 1];
+        next[next.length - 1] = { ...last, content: current };
+        return next;
+      });
+      streamTimeout.current = window.setTimeout(() => runChunk(index + 1), 140);
+    };
+    runChunk(0);
+  };
+
   const ask = () => {
     if (!question.trim()) return;
     const prompt = question.trim();
@@ -83,13 +131,16 @@ export function AiCoachPanel() {
     setQuestion("");
 
     window.setTimeout(() => {
-      generateAssistantReply(baseState, {
+      const reply = generateAssistantReply(baseState, {
         question: prompt,
         userName: "creador",
         projectId: activeProjectId
       });
-      setMessages(loadAssistantMemory(activeProjectId));
-      setIsThinking(false);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "", timestamp: new Date().toISOString() }
+      ]);
+      simulateStreaming(reply);
       if (!storedSnapshot) {
         refreshSnapshot();
       }
@@ -106,9 +157,29 @@ export function AiCoachPanel() {
             <p className="text-xs uppercase tracking-[0.18em] text-foreground-muted">Copiloto activo</p>
             <h2 className="text-2xl font-semibold text-foreground">{strings.title}</h2>
           </div>
-          <Button variant="secondary" onClick={refreshSnapshot} aria-label="Actualizar plan de IA">
-            {strings.refresh}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="ghost" size="sm" onClick={() => { resetAssistantMemory(activeProjectId); setMessages([]); }}>
+              Nueva conversación
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                resetAssistantMemory(activeProjectId);
+                setMessages([]);
+              }}
+            >
+              Borrar historial
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={refreshSnapshot}
+              aria-label="Actualizar plan de IA"
+            >
+              {strings.refresh}
+            </Button>
+          </div>
         </div>
         <p className="text-sm leading-relaxed text-foreground-muted">
           Diagnóstico diario con memoria breve por proyecto. El asistente responde en streaming y propone bloques de trabajo inteligentes.
@@ -189,7 +260,11 @@ export function AiCoachPanel() {
         </p>
       </div>
 
-      <div className="max-h-72 space-y-3 overflow-y-auto rounded-3xl border border-border/40 bg-surface-elevated/70 p-5 pr-2 scrollbar-thin" role="log" aria-live="polite">
+      <div
+        className="max-h-72 space-y-3 overflow-y-auto rounded-3xl border border-border/40 bg-surface-elevated/70 p-5 pr-2 scrollbar-thin"
+        role="log"
+        aria-live="polite"
+      >
         {messages.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-border/60 bg-surface-elevated/40 p-4 text-sm text-foreground-muted">
             El chatbot conoce tus tareas, metas y calendario. Haz una pregunta para iniciar la conversación.
@@ -211,6 +286,13 @@ export function AiCoachPanel() {
               <p className="mt-2 whitespace-pre-line leading-relaxed">{message.content}</p>
             </div>
           ))
+        )}
+        {isThinking && (
+          <div className="flex items-center gap-2 text-xs text-foreground-muted">
+            <span className="h-2 w-2 rounded-full bg-accent-primary" style={{ animation: "typing 1s ease-in-out infinite" }} />
+            <span className="h-2 w-2 rounded-full bg-accent-primary/80" style={{ animation: "typing 1s ease-in-out infinite", animationDelay: "0.12s" }} />
+            <span className="h-2 w-2 rounded-full bg-accent-primary/60" style={{ animation: "typing 1s ease-in-out infinite", animationDelay: "0.24s" }} />
+          </div>
         )}
       </div>
     </div>

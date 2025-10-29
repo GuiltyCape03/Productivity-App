@@ -9,7 +9,24 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { loadChatHistory, persistChatHistory, type ChatHistoryTurn } from "@/lib/ai/chat";
+import { loadChatHistory, persistChatHistory, resetChatHistory, type ChatHistoryTurn } from "@/lib/ai/chat";
+
+function TypingIndicator() {
+  return (
+    <div className="flex w-fit items-center gap-3 rounded-2xl border border-border/40 bg-surface-elevated/60 px-4 py-2 text-xs font-medium text-foreground">
+      <span className="uppercase tracking-[0.18em] text-foreground-muted">Copiloto</span>
+      <div className="flex items-center gap-1">
+        {[0, 1, 2].map((index) => (
+          <span
+            key={index}
+            className="h-2 w-2 rounded-full bg-accent-primary/80"
+            style={{ animation: "typing 1.2s ease-in-out infinite", animationDelay: `${index * 0.12}s` }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function TypingIndicator() {
   return (
@@ -38,21 +55,26 @@ function ChatView() {
   const endRef = useRef<HTMLDivElement | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
   const projectRef = useRef<string | null | undefined>(activeProjectId);
+  const lastSummaryRef = useRef(snapshot?.summary ?? "");
 
   useEffect(() => {
     projectRef.current = activeProjectId;
-    setMessages(loadChatHistory(activeProjectId));
+    resetChatHistory(activeProjectId);
+    setMessages([]);
   }, [activeProjectId]);
+
+  useEffect(() => {
+    const summary = snapshot?.summary ?? "";
+    if (messages.length > 0 && summary && summary !== lastSummaryRef.current) {
+      setMessages([]);
+      resetChatHistory(projectRef.current ?? null);
+    }
+    lastSummaryRef.current = summary;
+  }, [messages.length, snapshot?.summary]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  useEffect(() => {
-    return () => {
-      controllerRef.current?.abort();
-    };
-  }, []);
 
   const chips = snapshot?.focusChips ?? [];
   const summary = snapshot?.summary ?? "Comparte tus prioridades de hoy y te sugeriré el siguiente bloque de trabajo.";
@@ -180,6 +202,7 @@ function ChatView() {
     setIsStreaming(false);
     setError(null);
     setMessages(() => {
+      resetChatHistory(projectRef.current ?? null);
       persist([]);
       return [];
     });
@@ -192,7 +215,12 @@ function ChatView() {
 
   const canSend = input.trim().length > 0 && !isStreaming;
   const projectOptions = useMemo(() => [{ id: "", name: "Todos los proyectos" }, ...projects], [projects]);
-  const storageKeyLabel = activeProjectId || "inbox";
+  useEffect(() => {
+    return () => {
+      controllerRef.current?.abort();
+      controllerRef.current = null;
+    };
+  }, []);
 
   return (
     <PageLayout
@@ -241,7 +269,7 @@ function ChatView() {
               ))}
             </Select>
             <p className="text-xs text-foreground-muted">
-              El historial se guarda localmente bajo «nd.chat.v1.{storageKeyLabel}». Cambia de proyecto para alternar conversaciones.
+              El historial se mantiene solo durante la sesión actual y se reinicia al cambiar de proyecto o actualizar el panel.
             </p>
           </div>
         </div>
