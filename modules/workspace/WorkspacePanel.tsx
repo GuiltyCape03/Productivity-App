@@ -10,7 +10,10 @@ import { STRINGS } from "@/i18n/strings";
 import { useDashboard } from "@/modules/dashboard/DashboardProvider";
 import type { WorkspacePage } from "@/modules/dashboard/types";
 import { cn } from "@/styles/utils";
-import { v4 as uuid } from "uuid";
+
+function createId() {
+  return Math.random().toString(36).slice(2, 10);
+}
 
 const BLOCK_TYPES = [
   { value: "heading", label: "Encabezado" },
@@ -26,18 +29,18 @@ type DraftBlock = WorkspacePage["blocks"][number];
 
 function createBlock(type: BlockType): DraftBlock {
   if (type === "divider") {
-    return { id: uuid(), type, content: "---" };
+    return { id: createId(), type, content: "---" };
   }
   if (type === "heading") {
-    return { id: uuid(), type, content: "Nuevo encabezado" };
+    return { id: createId(), type, content: "Nuevo encabezado" };
   }
   if (type === "checklist") {
-    return { id: uuid(), type, content: "[ ] Primer paso" };
+    return { id: createId(), type, content: "[ ] Primer paso" };
   }
   if (type === "callout") {
-    return { id: uuid(), type, content: "💡 Idea clave" };
+    return { id: createId(), type, content: "💡 Idea clave" };
   }
-  return { id: uuid(), type, content: "Escribe algo poderoso" };
+  return { id: createId(), type, content: "Escribe algo poderoso" };
 }
 
 export function WorkspacePanel() {
@@ -61,7 +64,7 @@ export function WorkspacePanel() {
     const title = window.prompt("Título de la página");
     if (!title) return;
     const page: WorkspacePage = {
-      id: uuid(),
+      id: createId(),
       title,
       icon: "📘",
       blocks: [createBlock("heading"), createBlock("text")],
@@ -114,18 +117,18 @@ export function WorkspacePanel() {
       <CardContent className="flex flex-col gap-6 lg:flex-row">
         <aside className="flex w-full shrink-0 flex-col gap-2 lg:w-56">
           {orderedPages.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-white/10 bg-white/5 p-4 text-sm text-white/60">{strings.empty}</p>
+            <p className="rounded-2xl border border-dashed border-border/60 bg-surface-base/40 p-4 text-sm text-foreground-muted">{strings.empty}</p>
           ) : (
             orderedPages.map((page) => (
               <button
                 key={page.id}
                 onClick={() => setActivePageId(page.id)}
                 className={cn(
-                  "flex items-center justify-between rounded-2xl border border-transparent bg-white/5 px-4 py-3 text-left transition",
-                  activePageId === page.id && "border-accent-primary/40 bg-accent-primary/10"
+                  "flex items-center justify-between rounded-2xl border border-transparent bg-surface-base/40 px-4 py-3 text-left transition hover:border-accent-primary/40",
+                  activePageId === page.id && "border-accent-primary/50 bg-accent-primary/10"
                 )}
               >
-                <span className="flex items-center gap-2 text-sm text-white">
+                <span className="flex items-center gap-2 text-sm text-foreground">
                   <span>{page.icon}</span>
                   {page.title}
                 </span>
@@ -151,7 +154,7 @@ export function WorkspacePanel() {
               </div>
               <div className="space-y-4">
                 {activePage.blocks.map((block) => (
-                  <div key={block.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div key={block.id} className="rounded-2xl border border-border/60 bg-surface-base/40 p-4">
                     <div className="flex items-center justify-between pb-2">
                       <Badge variant="outline">{block.type}</Badge>
                       <button className="text-accent-danger/70 hover:text-accent-danger" onClick={() => removeBlock(block.id)}>
@@ -159,7 +162,7 @@ export function WorkspacePanel() {
                       </button>
                     </div>
                     {block.type === "divider" ? (
-                      <div className="h-px bg-white/20" />
+                      <div className="h-px bg-surface-muted/70" />
                     ) : block.type === "text" ? (
                       <Textarea value={block.content} onChange={(event) => updateBlock(block.id, event.target.value)} rows={3} />
                     ) : block.type === "checklist" ? (
@@ -174,7 +177,7 @@ export function WorkspacePanel() {
               </div>
             </div>
           ) : (
-            <p className="rounded-3xl border border-dashed border-white/10 bg-white/5 p-6 text-sm text-white/60">
+            <p className="rounded-3xl border border-dashed border-border/60 bg-surface-base/40 p-6 text-sm text-foreground-muted">
               {strings.empty}
             </p>
           )}

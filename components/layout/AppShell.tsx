@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo } from "react";
 import { useDashboard } from "@/modules/dashboard/DashboardProvider";
-import { STRINGS } from "@/i18n/strings";
 import { cn } from "@/styles/utils";
 import { Badge } from "@/components/ui/badge";
 
@@ -27,51 +26,55 @@ export function AppShell({ tasks, goals, workspace, calendar, ai, preferences }:
   const accentClass = useMemo(() => {
     switch (prefs.accent) {
       case "violet":
-        return "from-violet-500/60 to-purple-600/20";
+        return "from-violet-500/35 via-indigo-400/10 to-purple-900/0";
       case "sky":
-        return "from-sky-400/60 to-blue-600/20";
+        return "from-sky-400/35 via-cyan-300/10 to-blue-900/0";
       case "amber":
-        return "from-amber-400/60 to-orange-500/20";
+        return "from-amber-300/35 via-orange-200/10 to-amber-900/0";
       default:
-        return "from-emerald-400/60 to-lime-500/20";
+        return "from-emerald-400/35 via-teal-300/10 to-emerald-900/0";
     }
   }, [prefs.accent]);
 
-  const strings = STRINGS.es;
-
   return (
-    <div className="relative isolate min-h-screen overflow-hidden">
-      <div className={cn("pointer-events-none absolute inset-x-0 top-[-240px] h-[480px] blur-3xl", `bg-gradient-to-b ${accentClass}`)} />
-      <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 py-10 lg:px-10">
-        <header className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h1 className="text-4xl font-semibold tracking-tight text-white">{strings.dashboardTitle}</h1>
-            <p className="text-sm text-white/60">Convierte propósito en progreso con un copiloto que entiende tus proyectos.</p>
+    <div className="relative isolate min-h-screen pb-16">
+      <div className={cn("pointer-events-none absolute inset-x-0 top-[-320px] h-[520px] blur-3xl", `bg-gradient-to-b ${accentClass}`)} />
+      <div className="relative z-10 mx-auto w-full max-w-7xl px-6 py-12 sm:px-8">
+        <header className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-4">
+            <p className="text-xs font-medium uppercase tracking-[0.28em] text-foreground-muted">Workspace Inteligente</p>
+            <h1 className="font-serif text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+              NeuralDesk — Convierte propósito en progreso con un copiloto que entiende tus proyectos.
+            </h1>
+            <p className="max-w-2xl text-sm leading-relaxed text-foreground-muted">
+              Prioriza lo que importa hoy, mantén sincronizados tus proyectos y obtén diagnósticos diarios para avanzar sin
+              fricción.
+            </p>
           </div>
           {snapshot && (
-            <div className="flex items-center gap-3 rounded-3xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur">
-              <Badge variant={snapshot.sentiment === "overloaded" ? "danger" : snapshot.sentiment === "stretch" ? "sky" : "default"}>
-                IA
-              </Badge>
-              <div>
-                <p className="text-sm font-medium text-white">{snapshot.summary}</p>
-                <p className="text-xs text-white/60">Capacidad estimada: {snapshot.bandwidthEstimateMinutes} min</p>
+            <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-surface-elevated/90 p-5 shadow-soft backdrop-blur">
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge variant={snapshot.sentiment === "overloaded" ? "danger" : snapshot.sentiment === "stretch" ? "sky" : "default"}>
+                  Copiloto IA
+                </Badge>
+                <Badge variant="muted">Capacidad estimada: {snapshot.bandwidthEstimateMinutes} min</Badge>
+                {snapshot.nextBlock && <Badge variant="outline">Próximo bloque: {snapshot.nextBlock}</Badge>}
+              </div>
+              <p className="text-sm font-medium text-foreground">{snapshot.summary}</p>
+              <div className="flex flex-wrap gap-2 text-xs text-foreground-muted">
+                {snapshot.focusChips.map((chip) => (
+                  <span key={chip} className="rounded-full bg-surface-muted/70 px-3 py-1">
+                    {chip}
+                  </span>
+                ))}
               </div>
             </div>
           )}
         </header>
 
-        <div className="grid gap-8 lg:grid-cols-12">
-          <div className="lg:col-span-8 space-y-8">
-            {tasks}
-            {workspace}
-          </div>
-          <div className="lg:col-span-4 space-y-8">
-            {goals}
-            {calendar}
-            {ai}
-            {preferences}
-          </div>
+        <div className="mt-10 grid gap-6 lg:grid-cols-12">
+          <main className="lg:col-span-8 space-y-6">{tasks}{workspace}</main>
+          <aside className="lg:col-span-4 space-y-6">{goals}{calendar}{ai}{preferences}</aside>
         </div>
       </div>
     </div>

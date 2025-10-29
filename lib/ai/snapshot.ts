@@ -1,4 +1,4 @@
-import { formatISO } from "date-fns";
+import { addMinutes, format, formatISO } from "date-fns";
 import type { AiSnapshot, DashboardState, Task } from "@/modules/dashboard/types";
 
 function pickTopTasks(tasks: Task[]): string[] {
@@ -44,13 +44,46 @@ export function buildSnapshot(state: DashboardState): AiSnapshot {
         ? "Hay bastante en curso, prioriza bloques profundos y delega tareas ligeras."
         : "Tu plan luce balanceado, mantén el ritmo y agenda descansos activos.";
 
+  const focusNames = focusProjects
+    .map((id) => state.projects.find((project) => project.id === id)?.name)
+    .filter((name): name is string => Boolean(name));
+
+  const dailyGoalCandidate = state.goals
+    .filter((goal) => goal.projectId ? focusProjects.includes(goal.projectId) : true)
+    .sort((a, b) => {
+      const dueA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+      const dueB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+      return dueA - dueB;
+    })[0];
+
+  const dailyGoal = dailyGoalCandidate
+    ? `${dailyGoalCandidate.title} (${dailyGoalCandidate.completedUnits}/${dailyGoalCandidate.targetUnits} ${dailyGoalCandidate.unitLabel})`
+    : undefined;
+
+  const now = new Date();
+  const blockEnd = addMinutes(now, 50);
+  const breakEnd = addMinutes(blockEnd, 10);
+  const nextBlock = `${format(now, "HH:mm")}–${format(blockEnd, "HH:mm")} foco · descanso ${format(blockEnd, "HH:mm")}-${format(breakEnd, "HH:mm")}`;
+
+  const focusChips = [
+    `${incompleteTasks.length} tareas activas`,
+    `${Math.min(totalMinutes, capacityMinutes)} min estimados`,
+    dailyGoal ? `Meta: ${dailyGoal}` : undefined,
+    ...focusNames.map((name) => `Proyecto: ${name}`)
+  ].filter((chip): chip is string => Boolean(chip));
+
   return {
     focusProjects,
     recommendedTasks,
     suggestedHabits: habits,
     bandwidthEstimateMinutes: Math.min(totalMinutes, capacityMinutes),
     sentiment,
-    summary
+    summary,
+    focusChips,
+    pendingCount: incompleteTasks.length,
+    totalEstimateMinutes: totalMinutes,
+    dailyGoal,
+    nextBlock
   };
 }
 

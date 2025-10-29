@@ -63,6 +63,11 @@ export interface AiSnapshot {
   bandwidthEstimateMinutes: number;
   sentiment: "steady" | "overloaded" | "stretch";
   summary: string;
+  focusChips: string[];
+  pendingCount: number;
+  totalEstimateMinutes: number;
+  dailyGoal?: string;
+  nextBlock?: string;
 }
 
 export type DialogTone = "glass" | "solid" | "gradient";
@@ -86,6 +91,7 @@ export interface DashboardState {
   events: CalendarEvent[];
   snapshot?: AiSnapshot;
   preferences: DashboardPreferences;
+  activeProjectId: string | null;
   connectedCalendar?: {
     accountEmail: string;
     lastSynced?: string;

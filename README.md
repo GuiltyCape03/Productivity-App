@@ -10,6 +10,12 @@ NeuralDesk es un panel de productividad construido con Next.js 14 y Tailwind que
 - **Google Calendar opcional**: conecta tu cuenta (mock) para sincronizar eventos y ver tu agenda en contexto.
 - **Personalización visual**: ajusta tema, densidad, sombras, tonos de tarjetas y acento de color desde el panel de preferencias.
 
+## Diseño y temas
+
+- **Tipografías**: el proyecto carga [Inter](https://fonts.google.com/specimen/Inter) para texto y [Fraunces](https://fonts.google.com/specimen/Fraunces) para titulares mediante `next/font/google`. Las familias quedan disponibles como variables CSS `--font-sans` y `--font-serif`.
+- **Tokens**: los colores clave se definen en `app/globals.css` usando variables (`--surface-base`, `--surface-elevated`, `--surface-muted`, `--foreground-strong`, `--accent-*`) y se exponen en Tailwind a través de `tailwind.config.ts`.
+- **Modo claro/oscuro**: el tema activo se controla con el atributo `data-theme` del elemento `<html>`. Desde la UI puedes alternarlo en **Personaliza → Tema**, o manualmente estableciendo `document.documentElement.dataset.theme = "light" | "dark"`.
+
 ## Estructura del proyecto
 
 ```
