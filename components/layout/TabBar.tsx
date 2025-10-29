@@ -1,85 +1,135 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
-import { Plus, X } from "lucide-react";
-import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Plus, Wand2, X } from "lucide-react";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent
+} from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useTabsStore, type WorkspaceTab, getDefaultTabs } from "@/stores/tabsStore";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/styles/utils";
+import { getDefaultTabs, useTabsStore, type WorkspaceTab } from "@/stores/tabsStore";
+
+const PRESET_OPTIONS = getDefaultTabs();
+const SUGGESTED_EMOJIS = ["🧠", "📓", "🚀", "📌", "✅", "🎯", "📅", "💡", "🗂️", "💬"];
 
 interface TabTriggerProps {
   tab: WorkspaceTab;
   isActive: boolean;
+  isRenaming: boolean;
   onClose: () => void;
   onRename: (title: string) => void;
+  onRenameStart: () => void;
+  onRenameCancel: () => void;
   onOpen: () => void;
+  onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
 }
 
-function SortableTabTrigger({ tab, isActive, onClose, onRename, onOpen }: TabTriggerProps) {
+function SortableTabTrigger({
+  tab,
+  isActive,
+  isRenaming,
+  onClose,
+  onRename,
+  onRenameStart,
+  onRenameCancel,
+  onOpen,
+  onContextMenu
+}: TabTriggerProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: tab.id });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.7 : 1
-  };
-  const [isEditing, setEditing] = useState(false);
   const [value, setValue] = useState(tab.title);
 
   useEffect(() => {
     setValue(tab.title);
   }, [tab.title]);
 
-  const handleSubmit = useCallback(() => {
+  useEffect(() => {
+    if (!isRenaming) {
+      setValue(tab.title);
+    }
+  }, [isRenaming, tab.title]);
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1
+  };
+
+  const submit = useCallback(() => {
     const title = value.trim() || "Página";
     onRename(title);
-    setEditing(false);
-  }, [onRename, value]);
+  }, [value, onRename]);
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`group relative flex h-10 min-w-[132px] max-w-[240px] items-center rounded-xl border ${
-        isActive ? "border-accent-primary/80 bg-accent-primary/15" : "border-border/60 bg-surface-elevated/60"
-      } px-3 text-sm text-foreground transition-colors`}
+      className={cn(
+        "group relative flex h-11 min-w-[142px] max-w-[280px] items-center gap-2 rounded-2xl border px-3 text-sm text-foreground transition-all",
+        isActive
+          ? "border-accent-primary/60 bg-accent-primary/15 shadow-card"
+          : "border-border/60 bg-surface-elevated/70 hover:bg-surface-elevated/90"
+      )}
+      onDoubleClick={onRenameStart}
+      onContextMenu={onContextMenu}
+      role="tab"
+      aria-selected={isActive}
       {...attributes}
       {...listeners}
     >
       <button
         type="button"
         onClick={onOpen}
-        onDoubleClick={() => setEditing(true)}
         className="flex w-full items-center gap-2 truncate text-left outline-none"
+        aria-label={`Abrir ${tab.title}`}
       >
-        <span className="emoji" aria-hidden>
-          {tab.icon ?? "🗂️"}
+        <span className="text-lg leading-none">
+          {tab.icon || "🗂️"}
         </span>
-        {isEditing ? (
+        {isRenaming ? (
           <Input
             autoFocus
             value={value}
             onChange={(event) => setValue(event.target.value)}
-            onBlur={handleSubmit}
+            onBlur={() => {
+              submit();
+              onRenameCancel();
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
-                handleSubmit();
+                submit();
+                onRenameCancel();
               }
               if (event.key === "Escape") {
                 event.preventDefault();
-                setEditing(false);
                 setValue(tab.title);
+                onRenameCancel();
               }
             }}
             className="h-8 w-full border-transparent bg-transparent px-1 text-sm"
           />
         ) : (
-          <span className="truncate font-medium">{tab.title}</span>
+          <span className="truncate font-medium tracking-tight">{tab.title}</span>
         )}
       </button>
       <button
@@ -89,20 +139,37 @@ function SortableTabTrigger({ tab, isActive, onClose, onRename, onOpen }: TabTri
           onClose();
         }}
         aria-label={`Cerrar ${tab.title}`}
-        className="ml-2 hidden h-6 w-6 items-center justify-center rounded-md text-foreground-muted transition hover:bg-surface-muted hover:text-foreground group-hover:flex"
+        className="ml-1 hidden h-7 w-7 items-center justify-center rounded-xl text-foreground-muted transition hover:bg-surface-muted/40 hover:text-foreground group-hover:flex"
       >
-        <X className="h-3.5 w-3.5" aria-hidden />
+        <X className="h-4 w-4" aria-hidden />
       </button>
     </div>
   );
 }
 
-const PRESET_OPTIONS = getDefaultTabs();
+interface ContextMenuState {
+  tabId: string;
+  x: number;
+  y: number;
+}
 
 export function TabBar() {
   const router = useRouter();
   const pathname = usePathname();
-  const { tabs, activeId, load, initialised, setActive, add, close, rename, reorder, syncRoute } = useTabsStore((state) => ({
+  const searchParams = useSearchParams();
+  const {
+    tabs,
+    activeId,
+    load,
+    initialised,
+    setActive,
+    add,
+    close,
+    rename,
+    reorder,
+    syncRoute,
+    updateIcon
+  } = useTabsStore((state) => ({
     tabs: state.tabs,
     activeId: state.activeId,
     load: state.load,
@@ -112,7 +179,8 @@ export function TabBar() {
     close: state.close,
     rename: state.rename,
     reorder: state.reorder,
-    syncRoute: state.syncRoute
+    syncRoute: state.syncRoute,
+    updateIcon: state.updateIcon
   }));
 
   const sensors = useSensors(
@@ -121,25 +189,53 @@ export function TabBar() {
     })
   );
 
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [composerTitle, setComposerTitle] = useState("Página sin título");
+  const [composerEmoji, setComposerEmoji] = useState("🗒️");
+
   useEffect(() => {
     if (!initialised) {
       load();
     }
   }, [initialised, load]);
 
+  const currentRoute = useMemo(() => {
+    const base = pathname ?? "/dashboard";
+    const query = searchParams?.toString();
+    return query ? `${base}?${query}` : base;
+  }, [pathname, searchParams]);
+
   useEffect(() => {
     if (initialised) {
-      syncRoute(pathname ?? "/");
+      syncRoute(currentRoute);
     }
-  }, [initialised, pathname, syncRoute]);
+  }, [initialised, currentRoute, syncRoute]);
 
   useEffect(() => {
     if (!activeId) return;
     const activeTab = tabs.find((tab) => tab.id === activeId);
-    if (activeTab && pathname !== activeTab.route) {
+    if (activeTab && currentRoute !== activeTab.route) {
       router.replace(activeTab.route);
     }
-  }, [activeId, tabs, router, pathname]);
+  }, [activeId, tabs, router, currentRoute]);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleDismiss = () => setContextMenu(null);
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setContextMenu(null);
+      }
+    };
+    window.addEventListener("click", handleDismiss, true);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("click", handleDismiss, true);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [contextMenu]);
 
   const handleAddTab = useCallback(
     (preset: WorkspaceTab) => {
@@ -156,17 +252,51 @@ export function TabBar() {
     [add, router, setActive, tabs]
   );
 
-  const handleCreateWorkspace = useCallback(() => {
-    const workspaceTab = tabs.find((tab) => tab.route === "/workspace");
-    if (workspaceTab) {
-      setActive(workspaceTab.id);
-    } else {
-      const id = `workspace-${Date.now().toString(36)}`;
-      add({ id, title: "Workspace", icon: "🗂️", route: "/workspace" });
-      setActive(id);
+  const handleCreateCustom = useCallback(() => {
+    const title = composerTitle.trim() || "Nueva página";
+    const icon = composerEmoji.trim() || "🗂️";
+    const id = `tab-${Date.now().toString(36)}`;
+    const route = `/workspace?tab=${id}`;
+    const tab: WorkspaceTab = { id, title, icon, route };
+    add(tab);
+    setActive(id);
+    router.push(route);
+    setComposerOpen(false);
+    setComposerTitle("Página sin título");
+    setComposerEmoji("🗒️");
+  }, [add, composerEmoji, composerTitle, router, setActive]);
+
+  const openContextMenu = useCallback((tabId: string, event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const estimatedWidth = 220;
+    const estimatedHeight = 160;
+    const maxX = window.innerWidth - estimatedWidth - 12;
+    const maxY = window.innerHeight - estimatedHeight - 12;
+    const x = Math.min(event.clientX, Math.max(12, maxX));
+    const y = Math.min(event.clientY, Math.max(12, maxY));
+    setContextMenu({ tabId, x, y });
+  }, []);
+
+  const handleChangeIcon = useCallback(
+    (tabId: string) => {
+      const icon = window.prompt("Introduce un emoji o ícono corto para esta pestaña");
+      if (icon === null) return;
+      const value = icon.trim();
+      updateIcon(tabId, value ? value.slice(0, 4) : null);
+    },
+    [updateIcon]
+  );
+
+  const handleRename = useCallback((tabId: string) => {
+    setRenamingId(tabId);
+  }, []);
+
+  useEffect(() => {
+    if (composerOpen) {
+      setComposerTitle("Página sin título");
+      setComposerEmoji("🗒️");
     }
-    router.push("/workspace?newPage=1");
-  }, [add, router, setActive, tabs]);
+  }, [composerOpen]);
 
   const items = useMemo(() => tabs.map((tab) => tab.id), [tabs]);
 
@@ -187,8 +317,8 @@ export function TabBar() {
   }
 
   return (
-    <div className="sticky top-0 z-40 border-b border-border/50 bg-surface-base/80 backdrop-blur-md">
-      <div className="mx-auto flex max-w-7xl items-center gap-2 px-4 py-3 md:px-6">
+    <header className="sticky top-0 z-40 border-b border-border/40 bg-surface-base/70 backdrop-blur-xl">
+      <div className="mx-auto flex max-w-7xl items-center gap-3 px-6 py-4 md:px-12">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={items} strategy={horizontalListSortingStrategy}>
             <div className="flex flex-1 flex-wrap items-center gap-2">
@@ -197,12 +327,19 @@ export function TabBar() {
                   key={tab.id}
                   tab={tab}
                   isActive={tab.id === activeId}
+                  isRenaming={renamingId === tab.id}
                   onClose={() => close(tab.id)}
-                  onRename={(title) => rename(tab.id, title)}
+                  onRename={(title) => {
+                    rename(tab.id, title);
+                    setRenamingId(null);
+                  }}
+                  onRenameStart={() => setRenamingId(tab.id)}
+                  onRenameCancel={() => setRenamingId(null)}
                   onOpen={() => {
                     setActive(tab.id);
                     router.push(tab.route);
                   }}
+                  onContextMenu={(event) => openContextMenu(tab.id, event)}
                 />
               ))}
             </div>
@@ -210,31 +347,133 @@ export function TabBar() {
         </DndContext>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button type="button" variant="ghost" size="sm" className="ml-auto h-9 w-9 rounded-full">
+            <Button type="button" variant="ghost" size="sm" className="h-10 w-10 rounded-2xl border border-border/60">
               <Plus className="h-4 w-4" aria-hidden />
-              <span className="sr-only">Añadir pestaña</span>
+              <span className="sr-only">Crear pestaña</span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuContent align="end" className="w-64">
             <DropdownMenuLabel>Pestañas rápidas</DropdownMenuLabel>
             {PRESET_OPTIONS.map((preset) => (
               <DropdownMenuItem key={preset.id} onSelect={() => handleAddTab(preset)}>
-                <span className="emoji mr-2 text-lg" aria-hidden>
+                <span className="mr-2 text-lg" aria-hidden>
                   {preset.icon ?? "🗂️"}
                 </span>
                 {preset.title}
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={handleCreateWorkspace}>
-              <span className="emoji mr-2 text-lg" aria-hidden>
-                📝
+            <DropdownMenuItem onSelect={() => setComposerOpen(true)}>
+              <span className="mr-2 text-lg" aria-hidden>
+                <Wand2 className="h-4 w-4" />
               </span>
-              Nueva página de Workspace…
+              Nueva pestaña personalizada…
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-    </div>
+
+      {contextMenu && (
+        <div
+          className="fixed z-50 min-w-[200px] rounded-xl border border-border/50 bg-surface-elevated/90 p-2 shadow-card"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          role="menu"
+        >
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground hover:bg-surface-muted/40"
+            onClick={() => {
+              handleRename(contextMenu.tabId);
+              setContextMenu(null);
+            }}
+          >
+            Renombrar pestaña
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground hover:bg-surface-muted/40"
+            onClick={() => {
+              handleChangeIcon(contextMenu.tabId);
+              setContextMenu(null);
+            }}
+          >
+            Cambiar icono
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground hover:bg-surface-muted/40"
+            onClick={() => {
+              close(contextMenu.tabId);
+              setContextMenu(null);
+            }}
+          >
+            Cerrar pestaña
+          </button>
+        </div>
+      )}
+
+      <Dialog open={composerOpen} onOpenChange={setComposerOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Crear nueva pestaña</DialogTitle>
+            <DialogDescription>
+              Personaliza un espacio para tus notas rápidas. Podrás cambiar el icono y el título cuando quieras.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              handleCreateCustom();
+            }}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="tab-title">Título</Label>
+              <Input
+                id="tab-title"
+                value={composerTitle}
+                onChange={(event) => setComposerTitle(event.target.value)}
+                placeholder="Daily log, roadmap, notas personales…"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tab-icon">Icono</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  id="tab-icon"
+                  value={composerEmoji}
+                  onChange={(event) => setComposerEmoji(event.target.value)}
+                  className="max-w-[120px]"
+                />
+                <div className="flex flex-wrap gap-2">
+                  {SUGGESTED_EMOJIS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      className={cn(
+                        "h-8 w-8 rounded-xl border border-transparent text-lg transition",
+                        composerEmoji === emoji ? "border-accent-primary bg-accent-primary/20" : "bg-surface-muted/40"
+                      )}
+                      onClick={() => setComposerEmoji(emoji)}
+                      aria-label={`Usar ${emoji}`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button type="button" variant="ghost" onClick={() => setComposerOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" variant="primary">
+                Guardar pestaña
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </header>
   );
 }

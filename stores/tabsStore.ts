@@ -18,6 +18,7 @@ interface TabsState {
   add: (tab: WorkspaceTab) => void;
   close: (id: string) => void;
   rename: (id: string, title: string) => void;
+  updateIcon: (id: string, icon: string | null) => void;
   setActive: (id: string) => void;
   reorder: (from: number, to: number) => void;
   syncRoute: (route: string) => void;
@@ -27,13 +28,13 @@ interface TabsState {
 const STORAGE_KEY = "nd.tabs.v1";
 
 const DEFAULT_TABS: WorkspaceTab[] = [
-  { id: "dashboard", title: "Dashboard", icon: "📊", route: "/" },
-  { id: "tasks", title: "Tasks", icon: "✅", route: "/tasks" },
-  { id: "goals", title: "Goals", icon: "🎯", route: "/goals" },
+  { id: "dashboard", title: "Panel", icon: "📊", route: "/dashboard" },
+  { id: "tasks", title: "Tareas", icon: "✅", route: "/tasks" },
+  { id: "goals", title: "Metas", icon: "🎯", route: "/goals" },
   { id: "workspace", title: "Workspace", icon: "🗂️", route: "/workspace" },
-  { id: "calendar", title: "Calendar", icon: "📆", route: "/calendar" },
-  { id: "coach", title: "Coach", icon: "🤖", route: "/coach" },
-  { id: "chat", title: "Chat", icon: "💬", route: "/chat" }
+  { id: "calendar", title: "Agenda", icon: "📅", route: "/calendar" },
+  { id: "chat", title: "Chat IA", icon: "💬", route: "/chat" },
+  { id: "preferences", title: "Preferencias", icon: "⚙️", route: "/preferences" }
 ];
 
 function persistTabs(tabs: WorkspaceTab[]) {
@@ -87,8 +88,11 @@ export const useTabsStore = create<TabsState>((set, get) => ({
   },
   add: (tab) => {
     const route = withLeadingSlash(tab.route);
+    const hasQuery = route.includes("?");
     set((state) => {
-      const existing = state.tabs.find((item) => baseRoute(item.route) === baseRoute(route));
+      const existing = state.tabs.find((item) =>
+        hasQuery ? item.route === route : baseRoute(item.route) === baseRoute(route)
+      );
       if (existing) {
         return { ...state, activeId: existing.id };
       }
@@ -115,6 +119,13 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       return { ...state, tabs };
     });
   },
+  updateIcon: (id, icon) => {
+    set((state) => {
+      const tabs = state.tabs.map((tab) => (tab.id === id ? { ...tab, icon: icon ?? undefined } : tab));
+      persistTabs(tabs);
+      return { ...state, tabs };
+    });
+  },
   setActive: (id) => {
     set((state) => ({ ...state, activeId: id }));
   },
@@ -131,11 +142,17 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     });
   },
   syncRoute: (route) => {
-    const normalised = baseRoute(route);
     const { tabs } = get();
-    const target = tabs.find((tab) => baseRoute(tab.route) === normalised);
-    if (target) {
-      set({ activeId: target.id });
+    const normalisedRoute = withLeadingSlash(route);
+    const exact = tabs.find((tab) => withLeadingSlash(tab.route) === normalisedRoute);
+    if (exact) {
+      set({ activeId: exact.id });
+      return;
+    }
+    const normalised = baseRoute(route);
+    const fallback = tabs.find((tab) => baseRoute(tab.route) === normalised);
+    if (fallback) {
+      set({ activeId: fallback.id });
     }
   },
   updateProjectForActive: (projectId) => {
