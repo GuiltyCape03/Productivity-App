@@ -1,18 +1,19 @@
-import type { Metadata } from "next";
-import { Manrope } from "next/font/google";
+// app/layout.tsx
 import "./globals.css";
+import type { Metadata } from "next";
 
-const fontSans = Manrope({ subsets: ["latin"], variable: "--font-sans" });
-
-export const metadata: Metadata = {
-  title: "NeuralDesk",
-  description: "Convierte propósito en progreso con un asistente inteligente de proyectos"
-};
+export const metadata: Metadata = { title: "Productivity App" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body className={`${fontSans.variable} font-sans min-h-screen bg-surface-base`}>{children}</body>
+      <body className="
+        text-zinc-100
+        bg-[radial-gradient(circle_at_top,rgba(52,211,153,0.08),transparent_55%),
+        radial-gradient(circle_at_bottom,rgba(96,165,250,0.08),transparent_55%)]
+      ">
+        {children}
+      </body>
     </html>
   );
 }
