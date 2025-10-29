@@ -116,7 +116,7 @@ export function AiCoachPanel() {
           </div>
           <p className="text-sm text-foreground">{snapshot.summary}</p>
           <div className="flex flex-wrap gap-2 text-xs text-foreground-muted">
-            {snapshot.focusChips.map((chip) => (
+            {(snapshot.focusChips ?? []).map((chip) => (
               <span key={chip} className="rounded-full bg-surface-muted/60 px-3 py-1">
                 {chip}
               </span>
@@ -143,9 +143,9 @@ export function AiCoachPanel() {
           <div className="space-y-2">
             <Label>Hábitos sugeridos</Label>
             <div className="rounded-xl border border-dashed border-border/60 bg-surface-base/30 p-3 text-xs text-foreground-muted">
-              {snapshot.suggestedHabits.length ? (
+              {(snapshot.suggestedHabits ?? []).length ? (
                 <ul className="space-y-1">
-                  {snapshot.suggestedHabits.map((habit) => (
+                  {(snapshot.suggestedHabits ?? []).map((habit) => (
                     <li key={habit}>{habit}</li>
                   ))}
                 </ul>

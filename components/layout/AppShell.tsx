@@ -62,7 +62,7 @@ export function AppShell({ tasks, goals, workspace, calendar, ai, preferences }:
               </div>
               <p className="text-sm font-medium text-foreground">{snapshot.summary}</p>
               <div className="flex flex-wrap gap-2 text-xs text-foreground-muted">
-                {snapshot.focusChips.map((chip) => (
+                {(snapshot.focusChips ?? []).map((chip) => (
                   <span key={chip} className="rounded-full bg-surface-muted/70 px-3 py-1">
                     {chip}
                   </span>

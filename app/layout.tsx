@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import { Inter, Fraunces } from "next/font/google";
 import "./globals.css";
 import type { Metadata } from "next";
