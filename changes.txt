@@ -1,0 +1,6 @@
+Summary of updates:
+- Refreshed the dashboard with animated gradients, richer task cards, granular filters, bulk importers, and in-place editing for tasks and goals.
+- Expanded templates into configurable packs with intensity, project targeting, and due-date controls so routines load with one click.
+- Added history management, project administration, and enhanced settings to keep the workspace organized and responsive to daily focus.
+- Introduced a Notion-style workspace with AI-ready templates, block editing, and prettier dialogs for tasks, goals, and bulk import flows.
+- Added a Google Calendar connector with OAuth credentials, timeline visualization, and proactive status messaging so schedules stay in sync.

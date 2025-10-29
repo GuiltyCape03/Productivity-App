@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,37 @@ import { Switch } from "@/components/ui/switch";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, AreaChart, Area } from "recharts";
 import { v4 as uuidv4 } from "uuid";
 import { format } from "date-fns";
-import { Settings, Download, Upload, Timer, Focus, Keyboard, Rocket, Sun, Moon, Bell } from "lucide-react";
+import {
+  Settings,
+  Download,
+  Upload,
+  Timer,
+  Focus,
+  Keyboard,
+  Rocket,
+  Sun,
+  Moon,
+  Bell,
+  Sparkles,
+  Target,
+  Lightbulb,
+  CheckCircle2,
+  Pencil,
+  Trash2,
+  ListPlus,
+  Filter,
+  PartyPopper,
+  XCircle,
+  CalendarDays,
+  Palette,
+  Star,
+  RefreshCw,
+  Plus,
+  LayoutDashboard,
+  BookOpen,
+  Minus,
+  Link2,
+} from "lucide-react";
 
 // ============== Tipos ==============
 /** Una meta medible, tipo OKR minimalista. */
@@ -44,6 +74,52 @@ type Task = {
   priority: "low" | "med" | "high";
 };
 
+type AiPlanItem = {
+  id: string;
+  title: string;
+  project: string;
+  estimateMin: number;
+  reason: string;
+  score: number;
+  kind: "existing" | "suggested";
+  existingTaskId?: string;
+};
+
+type AiGoalPulse = {
+  goalId: string;
+  goalTitle: string;
+  message: string;
+  urgency: "low" | "medium" | "high";
+  recommendedUnits: number;
+  unitLabel: string;
+};
+
+type AiSuggestion = {
+  id: string;
+  headline: string;
+  detail: string;
+};
+
+type AiEngineSnapshot = {
+  summary: string;
+  stats: {
+    totalPending: number;
+    highPriority: number;
+    overdue: number;
+    capacityMin: number;
+    planMinutes: number;
+  };
+  plan: AiPlanItem[];
+  commitments: AiGoalPulse[];
+  suggestions: AiSuggestion[];
+};
+
+type AiFocusState = {
+  date: string;
+  taskIds: string[];
+  summary?: string;
+};
+
 /** Cierre de día con score. */
 type DailyReview = {
   id: string;
@@ -53,12 +129,84 @@ type DailyReview = {
   notes?: string;
 };
 
+type WorkspaceBlock = {
+  id: string;
+  type: "heading" | "todo" | "text" | "divider";
+  text: string;
+  checked?: boolean;
+  accent?: string;
+};
+
+type WorkspacePage = {
+  id: string;
+  icon: string;
+  title: string;
+  description?: string;
+  color: string;
+  createdAt: string;
+  updatedAt: string;
+  tags: string[];
+  favorite?: boolean;
+  blocks: WorkspaceBlock[];
+};
+
+type WorkspaceTemplateKey = "blank" | "daily" | "project" | "knowledge";
+
+type GoogleCalendarConfig = {
+  apiKey: string;
+  clientId: string;
+  calendarId: string;
+  timeZone: string;
+  lookAheadDays: number;
+};
+
+type GoogleCalendarProfile = {
+  name?: string;
+  email?: string;
+  avatar?: string;
+};
+
+type GoogleCalendarEvent = {
+  id: string;
+  summary: string;
+  start: string;
+  end: string;
+  location?: string;
+  hangoutLink?: string;
+  description?: string;
+};
+
+type GoogleCalendarState = {
+  status: "idle" | "loading" | "connected" | "error";
+  message?: string;
+  events: GoogleCalendarEvent[];
+  profile?: GoogleCalendarProfile;
+  lastSyncedAt?: string;
+};
+
+const DEFAULT_PROJECTS = [
+  "Economía",
+  "Investigación",
+  "Cursos",
+  "Legado Verde",
+  "Scouts",
+  "General",
+];
+
+const NEW_PROJECT_VALUE = "__new_project__";
+
 // ============== Helpers Persistencia ==============
 const LS_KEYS = {
   goals: "nahum_cls_goals",
   tasks: "nahum_cls_tasks",
   reviews: "nahum_cls_reviews",
   cfg: "nahum_cls_cfg",
+  projects: "nahum_cls_projects",
+  focus: "nahum_cls_focus",
+  workspace: "nahum_cls_workspace_pages",
+  workspaceActive: "nahum_cls_workspace_active",
+  gcalCfg: "nahum_cls_google_calendar_cfg",
+  gcalState: "nahum_cls_google_calendar_state",
 };
 
 type Cfg = {
@@ -68,6 +216,107 @@ type Cfg = {
   breakMin: number; // default 5
   sound: boolean;
   notifications: boolean;
+  dailyCapacityMin: number;
+  dailyMinSlots: number;
+};
+
+const DEFAULT_CFG: Cfg = {
+  theme: "light",
+  lang: "es",
+  focusBlockMin: 25,
+  breakMin: 5,
+  sound: true,
+  notifications: false,
+  dailyCapacityMin: 240,
+  dailyMinSlots: 3,
+};
+
+const WORKSPACE_COLORS = [
+  "emerald",
+  "sky",
+  "violet",
+  "amber",
+  "rose",
+  "slate",
+] as const;
+
+const WORKSPACE_COLOR_STYLES: Record<string, { bg: string; ring: string; text: string; pill: string }> = {
+  emerald: {
+    bg: "from-emerald-500/15 via-emerald-500/5 to-transparent",
+    ring: "ring-emerald-400/60",
+    text: "text-emerald-900 dark:text-emerald-100",
+    pill: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+  },
+  sky: {
+    bg: "from-sky-500/15 via-sky-500/5 to-transparent",
+    ring: "ring-sky-400/60",
+    text: "text-sky-900 dark:text-sky-100",
+    pill: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
+  },
+  violet: {
+    bg: "from-violet-500/15 via-violet-500/5 to-transparent",
+    ring: "ring-violet-400/60",
+    text: "text-violet-900 dark:text-violet-100",
+    pill: "bg-violet-500/15 text-violet-700 dark:text-violet-200",
+  },
+  amber: {
+    bg: "from-amber-500/20 via-amber-500/10 to-transparent",
+    ring: "ring-amber-400/60",
+    text: "text-amber-900 dark:text-amber-100",
+    pill: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+  },
+  rose: {
+    bg: "from-rose-500/15 via-rose-500/5 to-transparent",
+    ring: "ring-rose-400/60",
+    text: "text-rose-900 dark:text-rose-100",
+    pill: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
+  },
+  slate: {
+    bg: "from-slate-500/15 via-slate-500/5 to-transparent",
+    ring: "ring-slate-400/60",
+    text: "text-slate-900 dark:text-slate-100",
+    pill: "bg-slate-500/10 text-slate-700 dark:text-slate-200",
+  },
+  default: {
+    bg: "from-neutral-500/10 via-neutral-500/5 to-transparent",
+    ring: "ring-neutral-400/50",
+    text: "text-neutral-900 dark:text-neutral-100",
+    pill: "bg-neutral-500/10 text-neutral-700 dark:text-neutral-200",
+  },
+};
+
+function createDefaultWorkspacePages(): WorkspacePage[] {
+  const today = todayISO();
+  return [
+    {
+      id: uuidv4(),
+      icon: "🚀",
+      title: "Panel maestro",
+      description: "Tu centro de mando con quick wins, bloques de foco y vínculos clave.",
+      color: "emerald",
+      createdAt: today,
+      updatedAt: today,
+      tags: ["inicio", "daily"],
+      favorite: true,
+      blocks: [
+        { id: uuidv4(), type: "heading", text: "Ritual de arranque", accent: "emerald" },
+        { id: uuidv4(), type: "todo", text: "Revisa el plan de IA y el calendario", checked: false },
+        { id: uuidv4(), type: "todo", text: "Escoge el bloque más importante del día", checked: false },
+        { id: uuidv4(), type: "todo", text: "Define cómo se ve el día ganado", checked: false },
+        { id: uuidv4(), type: "divider", text: "" },
+        { id: uuidv4(), type: "heading", text: "Notas rápidas", accent: "sky" },
+        { id: uuidv4(), type: "text", text: "Escribe descubrimientos, recordatorios o ideas que quieras revisar al cierre." },
+      ],
+    },
+  ];
+}
+
+const DEFAULT_GCAL_CFG: GoogleCalendarConfig = {
+  apiKey: "",
+  clientId: "",
+  calendarId: "primary",
+  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Mexico_City",
+  lookAheadDays: 7,
 };
 
 function loadLS<T>(key: string, fallback: T): T {
@@ -107,6 +356,277 @@ function playBeep() {
   } catch {}
 }
 
+function diffDays(fromIso: string, toIso: string) {
+  const from = new Date(fromIso);
+  const to = new Date(toIso);
+  const ms = to.getTime() - from.getTime();
+  return Math.round(ms / (1000 * 60 * 60 * 24));
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function buildAiEngineSnapshot({
+  tasks,
+  goals,
+  reviews: _reviews,
+  lang,
+  capacityMinutes,
+  minimumSlots,
+}: {
+  tasks: Task[];
+  goals: Goal[];
+  reviews: DailyReview[];
+  lang: "es" | "en";
+  capacityMinutes: number;
+  minimumSlots: number;
+}): AiEngineSnapshot {
+  const todayFull = todayISO();
+  const todayKey = todayFull.slice(0, 10);
+  const undone = tasks.filter(t => !t.done);
+
+  const stats = {
+    totalPending: undone.length,
+    highPriority: undone.filter(t => t.priority === "high").length,
+    overdue: undone.filter(t => t.dueDate && t.dueDate.slice(0, 10) < todayKey).length,
+    capacityMin: capacityMinutes,
+    planMinutes: 0,
+  };
+
+  const dictionary = lang === "es"
+    ? {
+        high: "Prioridad alta",
+        medium: "Prioridad media",
+        dueToday: "Vence hoy",
+        dueSoon: (d: number) => `Vence en ${d} día${d === 1 ? "" : "s"}`,
+        overdue: (d: number) => `Atraso de ${Math.abs(d)} día${Math.abs(d) === 1 ? "" : "s"}`,
+        goalBoost: (project: string) => `Aporta a metas de ${project}`,
+        scoreImpact: "Suma a tu score diario",
+        suggestedFromGoal: (goal: string) => `Meta "${goal}" necesita movimiento hoy`,
+        summaryIntro: (total: number, high: number, overdue: number) =>
+          `Tienes ${total} tareas pendientes (${high} críticas, ${overdue} vencidas).`,
+        summaryFocus: (titles: string) => `La IA sugiere enfocarte en: ${titles}.`,
+        summaryGoals: (goalTitle: string) => `Recuerda empujar la meta "${goalTitle}" hoy mismo.`,
+        goalUrgent: (units: number, label: string, date?: string) =>
+          date
+            ? `Necesitas ${units} ${label} por día para llegar al ${date}.`
+            : `Reserva tiempo hoy para avanzar ${units} ${label}.`,
+        goalDone: (title: string) => `Meta "${title}" ya completada, celebra y archiva.`,
+        goalOverdue: (units: number, label: string) =>
+          `Vas retrasado: faltan ${units} ${label}. Recupera hoy.`,
+        suggestionOverdue: (count: number) =>
+          `Hay ${count} tareas vencidas. Agenda un bloque de recuperación.`,
+        suggestionNoGoals: "No has registrado avance en tus metas en los últimos 3 días.",
+        suggestionBacklog: "Tu backlog supera tu capacidad diaria. Revisa qué puedes delegar o descartar.",
+        suggestionFocus: (project: string) => `Crea una tarea concreta para avanzar ${project} hoy mismo.`,
+        aiPlanEmpty: "Sin tareas pendientes. Aprovecha para diseñar nuevas metas.",
+      }
+    : {
+        high: "High priority",
+        medium: "Medium priority",
+        dueToday: "Due today",
+        dueSoon: (d: number) => `Due in ${d} day${d === 1 ? "" : "s"}`,
+        overdue: (d: number) => `Overdue by ${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"}`,
+        goalBoost: (project: string) => `Moves goals in ${project}`,
+        scoreImpact: "Boosts your daily score",
+        suggestedFromGoal: (goal: string) => `Goal "${goal}" needs action today`,
+        summaryIntro: (total: number, high: number, overdue: number) =>
+          `You have ${total} pending tasks (${high} critical, ${overdue} overdue).`,
+        summaryFocus: (titles: string) => `AI suggests focusing on: ${titles}.`,
+        summaryGoals: (goalTitle: string) => `Push goal "${goalTitle}" before the day ends.`,
+        goalUrgent: (units: number, label: string, date?: string) =>
+          date
+            ? `Ship ${units} ${label} per day to hit ${date}.`
+            : `Block time today to advance ${units} ${label}.`,
+        goalDone: (title: string) => `Goal "${title}" is complete — wrap and archive.`,
+        goalOverdue: (units: number, label: string) =>
+          `You're late by ${units} ${label}. Recover today.`,
+        suggestionOverdue: (count: number) =>
+          `${count} tasks are overdue. Schedule a recovery block.`,
+        suggestionNoGoals: "No goal progress registered in the last 3 days.",
+        suggestionBacklog: "Your backlog exceeds your daily capacity. Decide what to drop or delegate.",
+        suggestionFocus: (project: string) => `Create a concrete task to move ${project} forward today.`,
+        aiPlanEmpty: "No pending tasks. Design a new challenge.",
+      };
+
+  const scoredTasks = undone.map(task => {
+    const reasons: string[] = [];
+    const priorityBoost = task.priority === "high" ? 60 : task.priority === "med" ? 35 : 15;
+    if (task.priority === "high") reasons.push(dictionary.high);
+    if (task.priority === "med") reasons.push(dictionary.medium);
+
+    const dueDiff = task.dueDate ? diffDays(todayFull, task.dueDate) : null;
+    let dueBoost = 0;
+    if (dueDiff !== null) {
+      if (dueDiff <= 0) {
+        reasons.push(dictionary.dueToday);
+        dueBoost = 55 + clamp(Math.abs(dueDiff), 0, 5) * 5;
+        if (dueDiff < 0) {
+          reasons[reasons.length - 1] = dictionary.overdue(dueDiff);
+          dueBoost += 20;
+        }
+      } else {
+        reasons.push(dictionary.dueSoon(dueDiff));
+        dueBoost = clamp(45 - dueDiff * 6, 0, 35);
+      }
+    }
+
+    const ageDays = clamp(diffDays(task.createdAt, todayFull), 0, 60);
+    const ageBoost = clamp(ageDays * 0.8, 0, 18);
+    const goalBoost = goals.some(g => g.project === task.project) ? 12 : 0;
+    if (goalBoost > 0) reasons.push(dictionary.goalBoost(task.project));
+
+    if (reasons.length === 0) reasons.push(dictionary.scoreImpact);
+
+    const score = task.points + priorityBoost + dueBoost + ageBoost + goalBoost;
+    return {
+      task,
+      score,
+      reason: reasons.join(" · "),
+    };
+  });
+
+  const ordered = scoredTasks.sort((a, b) => b.score - a.score);
+  const plan: AiPlanItem[] = [];
+  let capacityLeft = capacityMinutes;
+  for (const entry of ordered) {
+    if (plan.length >= minimumSlots && capacityLeft <= 0) break;
+    plan.push({
+      id: entry.task.id,
+      title: entry.task.title,
+      project: entry.task.project,
+      estimateMin: entry.task.estimateMin,
+      reason: entry.reason,
+      score: entry.score,
+      kind: "existing",
+      existingTaskId: entry.task.id,
+    });
+    capacityLeft -= entry.task.estimateMin;
+  }
+
+  stats.planMinutes = plan.reduce((acc, item) => acc + item.estimateMin, 0);
+
+  const commitments: AiGoalPulse[] = goals.map(goal => {
+    const totalDone = goal.history.reduce((sum, h) => sum + h.units, 0);
+    const remaining = Math.max(0, goal.targetUnits - totalDone);
+    const dueDiff = goal.dueDate ? diffDays(todayFull, goal.dueDate) : null;
+    const latestHistory = goal.history.reduce<string | undefined>((latest, h) =>
+      !latest || h.date > latest ? h.date : latest,
+    undefined);
+
+    let urgency: "low" | "medium" | "high" = "low";
+    let recommendedUnits = 0;
+    let message = "";
+
+    if (remaining <= 0) {
+      urgency = "low";
+      message = dictionary.goalDone(goal.title);
+    } else if (dueDiff !== null && dueDiff < 0) {
+      urgency = "high";
+      recommendedUnits = remaining;
+      message = dictionary.goalOverdue(remaining, goal.unitLabel);
+    } else {
+      const timeWindow = dueDiff !== null ? Math.max(1, dueDiff) : 5;
+      recommendedUnits = Math.max(1, Math.ceil(remaining / timeWindow));
+      if (dueDiff !== null) {
+        urgency = dueDiff <= 3 ? "high" : dueDiff <= 7 ? "medium" : "low";
+        message = dictionary.goalUrgent(
+          recommendedUnits,
+          goal.unitLabel,
+          format(new Date(goal.dueDate!), "dd/MM"),
+        );
+      } else {
+        urgency = latestHistory && diffDays(latestHistory, todayFull) <= 1 ? "medium" : "high";
+        message = dictionary.goalUrgent(recommendedUnits, goal.unitLabel);
+      }
+    }
+
+    return {
+      goalId: goal.id,
+      goalTitle: goal.title,
+      message,
+      urgency,
+      recommendedUnits,
+      unitLabel: goal.unitLabel,
+    };
+  }).sort((a, b) => {
+    const order = { high: 0, medium: 1, low: 2 } as const;
+    return order[a.urgency] - order[b.urgency];
+  });
+
+  const planProjects = new Set(plan.map(item => item.project));
+  const suggestedFromGoals: AiPlanItem[] = [];
+  for (const pulse of commitments) {
+    if (pulse.urgency === "low") continue;
+    const goal = goals.find(g => g.id === pulse.goalId);
+    if (!goal) continue;
+    const projectHasPending = undone.some(t => t.project === goal.project);
+    if (projectHasPending) continue;
+    suggestedFromGoals.push({
+      id: `suggest-${goal.id}`,
+      title: lang === "es"
+        ? `Bloque para ${goal.project}: ${pulse.recommendedUnits} ${goal.unitLabel}`
+        : `Block for ${goal.project}: ${pulse.recommendedUnits} ${goal.unitLabel}`,
+      project: goal.project,
+      estimateMin: Math.max(45, pulse.recommendedUnits * 30),
+      reason: dictionary.suggestedFromGoal(goal.title),
+      score: 40,
+      kind: "suggested",
+    });
+  }
+
+  const combinedPlan = [...plan, ...suggestedFromGoals.slice(0, Math.max(0, minimumSlots - plan.length))];
+
+  const summaryParts: string[] = [];
+  summaryParts.push(dictionary.summaryIntro(stats.totalPending, stats.highPriority, stats.overdue));
+  const topTitles = plan.slice(0, 3).map(item => item.title).join(lang === "es" ? ", " : ", ");
+  if (topTitles) summaryParts.push(dictionary.summaryFocus(topTitles));
+  const urgentGoal = commitments.find(c => c.urgency === "high");
+  if (urgentGoal) summaryParts.push(dictionary.summaryGoals(urgentGoal.goalTitle));
+
+  const suggestions: AiSuggestion[] = [];
+  if (stats.overdue > 0) {
+    suggestions.push({ id: "overdue", headline: lang === "es" ? "Recupera vencidas" : "Recover overdue", detail: dictionary.suggestionOverdue(stats.overdue) });
+  }
+
+  const threeDaysAgo = new Date(todayFull);
+  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+  const hasRecentGoalProgress = goals.some(goal => goal.history.some(h => new Date(h.date) >= threeDaysAgo));
+  if (!hasRecentGoalProgress && goals.length > 0) {
+    suggestions.push({ id: "goals", headline: lang === "es" ? "Empuja tus metas" : "Move your goals", detail: dictionary.suggestionNoGoals });
+  }
+
+  if (stats.totalPending * 30 > capacityMinutes * 2) {
+    suggestions.push({ id: "backlog", headline: lang === "es" ? "Backlog pesado" : "Heavy backlog", detail: dictionary.suggestionBacklog });
+  }
+
+  for (const pulse of commitments.filter(c => c.urgency !== "low").slice(0, 2)) {
+    if (!planProjects.has(goals.find(g => g.id === pulse.goalId)?.project || "")) {
+      const goal = goals.find(g => g.id === pulse.goalId);
+      if (goal) {
+        suggestions.push({
+          id: `goal-${goal.id}`,
+          headline: goal.project,
+          detail: dictionary.suggestionFocus(goal.project),
+        });
+      }
+    }
+  }
+
+  if (stats.totalPending === 0) {
+    suggestions.push({ id: "empty", headline: lang === "es" ? "Diseña el siguiente reto" : "Design the next challenge", detail: dictionary.aiPlanEmpty });
+  }
+
+  return {
+    summary: summaryParts.join(" "),
+    stats: { ...stats, planMinutes: combinedPlan.reduce((sum, item) => sum + item.estimateMin, 0) },
+    plan: combinedPlan,
+    commitments,
+    suggestions,
+  };
+}
+
 // i18n mínimo
 const strings = {
   es: {
@@ -133,6 +653,8 @@ const strings = {
     history: "Histórico",
     due: "Vence",
     project: "Proyecto",
+    newProject: "Nuevo proyecto",
+    newProjectPrompt: "¿Cómo se llama el nuevo proyecto?",
     estimate: "Estimado (min)",
     points: "Puntos",
     notes: "Notas",
@@ -140,6 +662,7 @@ const strings = {
     goalUnits: "Unidades",
     unitLabel: "Etiqueta",
     goalDate: "Fecha objetivo",
+    priority: "Prioridad",
     save: "Guardar",
     add: "Agregar",
     create: "Crear",
@@ -160,6 +683,171 @@ const strings = {
     export: "Exportar",
     import: "Importar",
     allowNotif: "Permitir notificaciones",
+    aiCoach: "Motor IA",
+    aiSummaryTitle: "Diagnóstico del día",
+    aiPlanLoad: "Plan sugerido",
+    aiCapacityLabel: "Capacidad diaria",
+    aiApplyPlan: "Aceptar plan",
+    aiReapplyPlan: "Actualizar plan",
+    aiPlanApplied: "Plan aplicado",
+    aiPlanAppliedHint: "Estas tareas quedaron marcadas como foco del día.",
+    aiNoPlan: "La IA necesita tareas activas para construir tu enfoque.",
+    aiSuggested: "Sugerido",
+    aiFocusBadge: "Foco IA",
+    aiGoalPulse: "Pulso de metas",
+    aiNoGoals: "Registra una meta para obtener recomendaciones.",
+    aiUrgencyHigh: "Alta",
+    aiUrgencyMedium: "Media",
+    aiUrgencyLow: "Baja",
+    aiRecommended: "Recomendado",
+    aiSuggestions: "Siguientes movimientos",
+    aiNoSuggestions: "Sin recomendaciones adicionales. Sigue ejecutando.",
+    aiMinSlotsLabel: "Mínimo de tareas diarias",
+    filters: "Filtros",
+    allProjects: "Todos los proyectos",
+    allPriorities: "Todas las prioridades",
+    priorityHigh: "Alta",
+    priorityMedium: "Media",
+    priorityLow: "Baja",
+    searchPlaceholder: "Buscar por título o proyecto",
+    showCompleted: "Mostrar completadas",
+    showFocusOnly: "Solo foco IA",
+    clearFilters: "Limpiar filtros",
+    bulkTasks: "Cargar tareas en lote",
+    bulkHint: "Una por línea: Proyecto | Título | minutos | prioridad (high/med/low).",
+    bulkGoals: "Cargar metas en lote",
+    bulkGoalHint: "Una por línea: Proyecto | Meta | unidades objetivo | etiqueta.",
+    importExample: "Ejemplo",
+    edit: "Editar",
+    delete: "Eliminar",
+    cancel: "Cancelar",
+    saveChanges: "Guardar cambios",
+    goalProgress: "Avance total",
+    historyEntries: "Registro",
+    emptyHistory: "Sin registros todavía.",
+    removeEntry: "Quitar",
+    manageProjects: "Gestionar proyectos",
+    manageProjectsHint: "Elimina proyectos que ya no usas. Los elementos activos se moverán a General.",
+    removeProject: "Eliminar proyecto",
+    confirmRemoveProject: "Los elementos activos se moverán a General ({count}). ¿Continuar?",
+    cannotRemoveDefault: "Los proyectos base no pueden eliminarse.",
+    noCustomProjects: "Aún no tienes proyectos personalizados.",
+    confirmDeleteTask: "¿Eliminar esta tarea?",
+    confirmDeleteGoal: "¿Eliminar esta meta y su historial?",
+    templateProjectLabel: "Aplicar sobre",
+    templateIntensity: "Intensidad",
+    templateSuccess: "Plantilla cargada. Revisa tus tareas.",
+    templateLight: "Ligera",
+    templateBalanced: "Balanceada",
+    templateTurbo: "Turbo",
+    bulkParsed: (count: number) => `${count} elementos añadidos.`,
+    priorityPromote: "Priorizar",
+    priorityDemote: "Bajar prioridad",
+    workspace: "Workspace",
+    workspacePages: "Páginas inteligentes",
+    workspaceSidebarHint: "Diseña vistas al estilo Notion para aterrizar tus objetivos diarios o proyectos.",
+    workspaceNewPage: "Nueva página",
+    workspaceTemplates: "Plantillas rápidas",
+    workspaceTemplateDailyName: "Agenda diaria",
+    workspaceTemplateProjectName: "Proyecto",
+    workspaceTemplateKnowledgeName: "Laboratorio",
+    workspaceTemplateBlankName: "Página en blanco",
+    workspaceTemplateBlankTitle: "Página en blanco",
+    workspaceTemplateBlankDescription: "Comienza desde cero con un lienzo limpio.",
+    workspaceTemplateDailyTitle: "Agenda de ejecución diaria",
+    workspaceTemplateDailyDescription: "Alinea foco, checklist de mínimos y reflexiones del día.",
+    workspaceTemplateProjectTitle: "Tablero de proyecto",
+    workspaceTemplateProjectDescription: "Visualiza el norte, hitos y recursos clave de un proyecto.",
+    workspaceTemplateKnowledgeTitle: "Laboratorio de ideas",
+    workspaceTemplateKnowledgeDescription: "Centraliza preguntas, hallazgos y referencias de investigación.",
+    workspaceDuplicateSuffix: "copia",
+    workspaceSearchPlaceholder: "Buscar páginas o etiquetas",
+    workspaceFilterAll: "Todas las etiquetas",
+    workspaceTagsLabel: "Etiquetas",
+    workspaceEmpty: "No hay páginas todavía.",
+    workspaceCreateFirst: "Crea una página para diseñar tu sistema.",
+    workspaceFavorite: "Favorita",
+    workspaceFavoriteTooltip: "Marcar como favorita",
+    workspaceLastEdited: "Actualizada",
+    workspaceTitlePlaceholder: "Página sin título",
+    workspaceDescriptionPlaceholder: "Describe el propósito o el resultado deseado",
+    workspaceTagsPlaceholder: "Ej. focus, universidad",
+    workspaceIconLabel: "Icono",
+    workspaceColorLabel: "Color",
+    workspaceActions: "Acciones",
+    workspaceDuplicate: "Duplicar",
+    workspaceDelete: "Eliminar",
+    workspaceDeleteConfirm: "¿Eliminar esta página? Perderás sus bloques.",
+    workspaceAddBlock: "Agregar bloque",
+    workspaceAddHeading: "Encabezado",
+    workspaceAddTodo: "Checklist",
+    workspaceAddText: "Nota",
+    workspaceAddDivider: "Separador",
+    workspaceNoBlocks: "Añade bloques para estructurar esta página.",
+    workspaceChangeAccent: "Cambiar acento",
+    workspaceBlockToday: "Victoria de hoy",
+    workspaceBlockDailyFocus: "Bloque crítico del día",
+    workspaceBlockDailySecondary: "Segundo empuje",
+    workspaceBlockSharpen: "Cierre / aprendizaje clave",
+    workspaceBlockHighlights: "Highlights",
+    workspaceBlockHighlightsHint: "Resume logros, aprendizajes y pendientes rápidos.",
+    workspaceBlockNorthStar: "North Star",
+    workspaceBlockNorthStarHint: "Define qué impacto buscas lograr con este proyecto.",
+    workspaceBlockRoadmap: "Roadmap inmediato",
+    workspaceBlockMilestoneOne: "Hito 1 listo",
+    workspaceBlockMilestoneTwo: "Hito 2 encaminado",
+    workspaceBlockMilestoneThree: "Hito 3 desbloqueado",
+    workspaceBlockResources: "Recursos & enlaces",
+    workspaceBlockResourcesHint: "Pega referencias, briefs y documentos críticos.",
+    workspaceBlockQuestions: "Preguntas guía",
+    workspaceBlockQuestionsHint: "Qué necesitas comprender o validar con esta investigación.",
+    workspaceBlockIdeas: "Ideas en progreso",
+    workspaceBlockIdeasHint: "Captura hipótesis, conceptos y experimentos en curso.",
+    workspaceBlockReferences: "Referencias",
+    workspaceBlockReferencesHint: "Guarda lecturas, videos y contactos clave.",
+    workspaceBlockBlankHeading: "Nuevo bloque",
+    workspaceBlockBlankHint: "Agrega texto, checklist o encabezados para darle forma.",
+    workspaceBlockNewHeading: "Nuevo encabezado",
+    workspaceBlockNewTodo: "Nueva tarea",
+    workspaceBlockNewText: "Nuevo texto",
+    workspaceDividerLabel: "Separador",
+    calendar: "Calendario",
+    calendarHeading: "Google Calendar",
+    calendarIntro: "Sincroniza tus eventos para planear alrededor de compromisos reales.",
+    calendarStatus: "Estado",
+    calendarStatusReadyHint: "Listo para conectar",
+    calendarStatusIdle: "Desconectado",
+    calendarStatusLoading: "Sincronizando…",
+    calendarStatusConnected: "Conectado",
+    calendarStatusError: "Error",
+    calendarReady: "API cargada",
+    calendarNotReady: "Esperando a Google",
+    calendarConnect: "Conectar con Google",
+    calendarRefresh: "Actualizar eventos",
+    calendarDisconnect: "Desconectar",
+    calendarConfigTitle: "Credenciales",
+    calendarApiKey: "API key",
+    calendarClientId: "Client ID de OAuth",
+    calendarCalendarId: "ID de calendario",
+    calendarTimezone: "Zona horaria",
+    calendarLookAhead: "Ventana",
+    calendarLookAheadSuffix: "días",
+    calendarHint: "Usa credenciales OAuth de tipo web (https://developers.google.com/calendar) y habilita Calendar API.",
+    calendarInstructions: "Al conectar, los eventos próximos aparecerán aquí con horarios y enlaces.",
+    calendarUpcoming: "Eventos próximos",
+    calendarNoEvents: "No hay eventos en la ventana seleccionada.",
+    calendarLastSync: "Última sincronización",
+    calendarSignedInAs: "Sesión iniciada como",
+    calendarOpenEvent: "Abrir en Google Calendar",
+    calendarEventAllDay: "Todo el día",
+    calendarManualLink: "Guía de credenciales",
+    calendarStatusNoApi: "No pudimos cargar el cliente de Google. Revisa tu conexión o bloqueadores.",
+    calendarConnecting: "Conectando con Google…",
+    calendarAuthRequired: "Inicia sesión para poder leer tu calendario.",
+    calendarUntitled: "(sin título)",
+    calendarSyncedAt: "Sincronizado a las {time}",
+    calendarUnknownError: "Ocurrió un error inesperado al sincronizar.",
+    calendarDisconnected: "Desconectado.",
   },
   en: {
     title: "AI Classroom · Execution Panel",
@@ -185,6 +873,8 @@ const strings = {
     history: "History",
     due: "Due",
     project: "Project",
+    newProject: "New project",
+    newProjectPrompt: "Name of the new project",
     estimate: "Estimate (min)",
     points: "Points",
     notes: "Notes",
@@ -192,6 +882,7 @@ const strings = {
     goalUnits: "Units",
     unitLabel: "Unit label",
     goalDate: "Target date",
+    priority: "Priority",
     save: "Save",
     add: "Add",
     create: "Create",
@@ -212,6 +903,171 @@ const strings = {
     export: "Export",
     import: "Import",
     allowNotif: "Allow notifications",
+    aiCoach: "AI coach",
+    aiSummaryTitle: "Daily diagnosis",
+    aiPlanLoad: "Suggested plan",
+    aiCapacityLabel: "Daily capacity",
+    aiApplyPlan: "Adopt plan",
+    aiReapplyPlan: "Refresh plan",
+    aiPlanApplied: "Plan locked",
+    aiPlanAppliedHint: "These tasks are now tagged as today's focus.",
+    aiNoPlan: "The assistant needs active tasks to build your focus.",
+    aiSuggested: "Suggested",
+    aiFocusBadge: "AI Focus",
+    aiGoalPulse: "Goal pulse",
+    aiNoGoals: "Add a goal to get tailored nudges.",
+    aiUrgencyHigh: "High",
+    aiUrgencyMedium: "Medium",
+    aiUrgencyLow: "Low",
+    aiRecommended: "Recommended",
+    aiSuggestions: "Next moves",
+    aiNoSuggestions: "No extra recommendations. Keep shipping.",
+    aiMinSlotsLabel: "Minimum daily tasks",
+    filters: "Filters",
+    allProjects: "All projects",
+    allPriorities: "All priorities",
+    priorityHigh: "High",
+    priorityMedium: "Medium",
+    priorityLow: "Low",
+    searchPlaceholder: "Search title or project",
+    showCompleted: "Show completed",
+    showFocusOnly: "AI focus only",
+    clearFilters: "Clear filters",
+    bulkTasks: "Bulk add tasks",
+    bulkHint: "One per line: Project | Title | minutes | priority (high/med/low).",
+    bulkGoals: "Bulk add goals",
+    bulkGoalHint: "One per line: Project | Goal | target units | unit label.",
+    importExample: "Example",
+    edit: "Edit",
+    delete: "Delete",
+    cancel: "Cancel",
+    saveChanges: "Save changes",
+    goalProgress: "Total progress",
+    historyEntries: "Log",
+    emptyHistory: "No entries yet.",
+    removeEntry: "Remove",
+    manageProjects: "Manage projects",
+    manageProjectsHint: "Remove projects you no longer use. Active items will move to General.",
+    removeProject: "Remove project",
+    confirmRemoveProject: "Active items will move to General ({count}). Continue?",
+    cannotRemoveDefault: "Base projects cannot be removed.",
+    noCustomProjects: "No custom projects yet.",
+    confirmDeleteTask: "Delete this task?",
+    confirmDeleteGoal: "Delete this goal and its history?",
+    templateProjectLabel: "Apply to",
+    templateIntensity: "Intensity",
+    templateSuccess: "Template loaded. Review your board.",
+    templateLight: "Light",
+    templateBalanced: "Balanced",
+    templateTurbo: "Turbo",
+    bulkParsed: (count: number) => `${count} items added.`,
+    priorityPromote: "Promote",
+    priorityDemote: "Lower priority",
+    workspace: "Workspace",
+    workspacePages: "Smart pages",
+    workspaceSidebarHint: "Craft Notion-style views to anchor your focus, goals, and projects.",
+    workspaceNewPage: "New page",
+    workspaceTemplates: "Quick templates",
+    workspaceTemplateDailyName: "Daily agenda",
+    workspaceTemplateProjectName: "Project",
+    workspaceTemplateKnowledgeName: "Lab",
+    workspaceTemplateBlankName: "Blank page",
+    workspaceTemplateBlankTitle: "Blank page",
+    workspaceTemplateBlankDescription: "Start with a clean canvas and build your own blocks.",
+    workspaceTemplateDailyTitle: "Daily execution agenda",
+    workspaceTemplateDailyDescription: "Align focus, minimum checklist, and end-of-day reflections.",
+    workspaceTemplateProjectTitle: "Project command board",
+    workspaceTemplateProjectDescription: "Surface the north star, key milestones, and critical resources.",
+    workspaceTemplateKnowledgeTitle: "Idea lab",
+    workspaceTemplateKnowledgeDescription: "Centralize guiding questions, findings, and references.",
+    workspaceDuplicateSuffix: "copy",
+    workspaceSearchPlaceholder: "Search pages or tags",
+    workspaceFilterAll: "All tags",
+    workspaceTagsLabel: "Tags",
+    workspaceEmpty: "No pages yet.",
+    workspaceCreateFirst: "Spin up a page to design your system.",
+    workspaceFavorite: "Favorite",
+    workspaceFavoriteTooltip: "Mark as favorite",
+    workspaceLastEdited: "Updated",
+    workspaceTitlePlaceholder: "Untitled page",
+    workspaceDescriptionPlaceholder: "Describe the purpose or desired outcome",
+    workspaceTagsPlaceholder: "e.g. focus, university",
+    workspaceIconLabel: "Icon",
+    workspaceColorLabel: "Color",
+    workspaceActions: "Actions",
+    workspaceDuplicate: "Duplicate",
+    workspaceDelete: "Delete",
+    workspaceDeleteConfirm: "Delete this page? Blocks will be removed as well.",
+    workspaceAddBlock: "Add block",
+    workspaceAddHeading: "Heading",
+    workspaceAddTodo: "Checklist",
+    workspaceAddText: "Note",
+    workspaceAddDivider: "Divider",
+    workspaceNoBlocks: "Add blocks to structure this page.",
+    workspaceChangeAccent: "Change accent",
+    workspaceBlockToday: "Win of the day",
+    workspaceBlockDailyFocus: "Critical focus block",
+    workspaceBlockDailySecondary: "Second push",
+    workspaceBlockSharpen: "Sharpen / key learning",
+    workspaceBlockHighlights: "Highlights",
+    workspaceBlockHighlightsHint: "Capture wins, insights, and quick follow-ups.",
+    workspaceBlockNorthStar: "North star",
+    workspaceBlockNorthStarHint: "Clarify the impact this project should deliver.",
+    workspaceBlockRoadmap: "Immediate roadmap",
+    workspaceBlockMilestoneOne: "Milestone 1 delivered",
+    workspaceBlockMilestoneTwo: "Milestone 2 in motion",
+    workspaceBlockMilestoneThree: "Milestone 3 unlocked",
+    workspaceBlockResources: "Resources & links",
+    workspaceBlockResourcesHint: "Drop references, briefs, and critical docs.",
+    workspaceBlockQuestions: "Guiding questions",
+    workspaceBlockQuestionsHint: "What do you need to validate or understand?",
+    workspaceBlockIdeas: "Ideas in progress",
+    workspaceBlockIdeasHint: "Capture hypotheses, concepts, and experiments.",
+    workspaceBlockReferences: "References",
+    workspaceBlockReferencesHint: "Store readings, videos, and key contacts.",
+    workspaceBlockBlankHeading: "New block",
+    workspaceBlockBlankHint: "Add text, checklists, or headings to shape the page.",
+    workspaceBlockNewHeading: "New heading",
+    workspaceBlockNewTodo: "New task",
+    workspaceBlockNewText: "New text",
+    workspaceDividerLabel: "Divider",
+    calendar: "Calendar",
+    calendarHeading: "Google Calendar",
+    calendarIntro: "Sync your events so the planner adapts to real commitments.",
+    calendarStatus: "Status",
+    calendarStatusReadyHint: "Ready to connect",
+    calendarStatusIdle: "Disconnected",
+    calendarStatusLoading: "Syncing…",
+    calendarStatusConnected: "Connected",
+    calendarStatusError: "Error",
+    calendarReady: "API loaded",
+    calendarNotReady: "Waiting for Google",
+    calendarConnect: "Connect Google",
+    calendarRefresh: "Refresh events",
+    calendarDisconnect: "Disconnect",
+    calendarConfigTitle: "Credentials",
+    calendarApiKey: "API key",
+    calendarClientId: "OAuth client ID",
+    calendarCalendarId: "Calendar ID",
+    calendarTimezone: "Time zone",
+    calendarLookAhead: "Window",
+    calendarLookAheadSuffix: "days",
+    calendarHint: "Use a web OAuth client with Calendar API enabled (https://developers.google.com/calendar).",
+    calendarInstructions: "After connecting you'll see upcoming events with rich details.",
+    calendarUpcoming: "Upcoming events",
+    calendarNoEvents: "No events in the selected window.",
+    calendarLastSync: "Last sync",
+    calendarSignedInAs: "Signed in as",
+    calendarOpenEvent: "Open in Google Calendar",
+    calendarEventAllDay: "All day",
+    calendarManualLink: "Credential guide",
+    calendarStatusNoApi: "We couldn't load the Google client. Check your connection or blockers.",
+    calendarConnecting: "Connecting to Google…",
+    calendarAuthRequired: "Sign in to read your calendar.",
+    calendarUntitled: "(untitled)",
+    calendarSyncedAt: "Synced at {time}",
+    calendarUnknownError: "Something went wrong while syncing.",
+    calendarDisconnected: "Disconnected.",
   }
 } as const;
 
@@ -221,13 +1077,154 @@ export default function Dashboard() {
   const [goals, setGoals] = useState<Goal[]>(() => loadLS<Goal[]>(LS_KEYS.goals, []));
   const [tasks, setTasks] = useState<Task[]>(() => loadLS<Task[]>(LS_KEYS.tasks, []));
   const [reviews, setReviews] = useState<DailyReview[]>(() => loadLS<DailyReview[]>(LS_KEYS.reviews, []));
-  const [cfg, setCfg] = useState<Cfg>(() => loadLS<Cfg>(LS_KEYS.cfg, { theme: "light", lang: "es", focusBlockMin: 25, breakMin: 5, sound: true, notifications: false }));
+  const [cfg, setCfg] = useState<Cfg>(() => ({ ...DEFAULT_CFG, ...loadLS<Cfg>(LS_KEYS.cfg, DEFAULT_CFG) }));
+  const [projects, setProjects] = useState<string[]>(() => loadLS<string[]>(LS_KEYS.projects, DEFAULT_PROJECTS));
+  const [aiFocus, setAiFocus] = useState<AiFocusState>(() => {
+    const today = todayISO().slice(0, 10);
+    const stored = loadLS<AiFocusState>(LS_KEYS.focus, { date: today, taskIds: [] });
+    if (!stored || stored.date !== today) return { date: today, taskIds: [] };
+    return stored;
+  });
+  const [taskProjectFilter, setTaskProjectFilter] = useState<string>("all");
+  const [taskPriorityFilter, setTaskPriorityFilter] = useState<string>("all");
+  const [taskSearch, setTaskSearch] = useState("");
+  const [showCompletedTasks, setShowCompletedTasks] = useState(false);
+  const [focusOnly, setFocusOnly] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+  const workspaceSeed = useMemo<WorkspacePage[]>(() => {
+    const stored = loadLS<WorkspacePage[]>(LS_KEYS.workspace, []);
+    if (stored.length) return stored;
+    return createDefaultWorkspacePages();
+  }, []);
+  const [workspacePages, setWorkspacePages] = useState<WorkspacePage[]>(workspaceSeed);
+  const [activeWorkspacePageId, setActiveWorkspacePageId] = useState<string>(() => {
+    const stored = loadLS<string | null>(LS_KEYS.workspaceActive, null);
+    return stored || workspaceSeed[0]?.id || "";
+  });
+  const [gcalConfig, setGcalConfig] = useState<GoogleCalendarConfig>(() => ({
+    ...DEFAULT_GCAL_CFG,
+    ...loadLS<GoogleCalendarConfig>(LS_KEYS.gcalCfg, DEFAULT_GCAL_CFG),
+  }));
+  const [gcalState, setGcalState] = useState<GoogleCalendarState>(() => {
+    const stored = loadLS<GoogleCalendarState>(LS_KEYS.gcalState, { status: "idle", events: [] });
+    return {
+      status: stored.status ?? "idle",
+      message: stored.message,
+      events: Array.isArray(stored.events) ? stored.events : [],
+      profile: stored.profile,
+      lastSyncedAt: stored.lastSyncedAt,
+    };
+  });
+  const [gapiReady, setGapiReady] = useState(false);
+  const gapiScriptLoaded = useRef(false);
 
   // Persistencia automática
   useEffect(() => saveLS(LS_KEYS.goals, goals), [goals]);
   useEffect(() => saveLS(LS_KEYS.tasks, tasks), [tasks]);
   useEffect(() => saveLS(LS_KEYS.reviews, reviews), [reviews]);
   useEffect(() => saveLS(LS_KEYS.cfg, cfg), [cfg]);
+  useEffect(() => saveLS(LS_KEYS.projects, projects), [projects]);
+  useEffect(() => saveLS(LS_KEYS.focus, aiFocus), [aiFocus]);
+  useEffect(() => saveLS(LS_KEYS.workspace, workspacePages), [workspacePages]);
+  useEffect(() => {
+    if (activeWorkspacePageId) {
+      saveLS(LS_KEYS.workspaceActive, activeWorkspacePageId);
+    }
+  }, [activeWorkspacePageId]);
+  useEffect(() => saveLS(LS_KEYS.gcalCfg, gcalConfig), [gcalConfig]);
+  useEffect(() => saveLS(LS_KEYS.gcalState, gcalState), [gcalState]);
+
+  useEffect(() => {
+    const today = todayISO().slice(0, 10);
+    setAiFocus(prev => (prev.date === today ? prev : { date: today, taskIds: [], summary: undefined }));
+  }, []);
+
+  useEffect(() => {
+    if (taskProjectFilter !== "all" && !projects.includes(taskProjectFilter)) {
+      setTaskProjectFilter("all");
+    }
+  }, [projects, taskProjectFilter]);
+
+  useEffect(() => {
+    const today = todayISO().slice(0, 10);
+    if (aiFocus.date !== today && focusOnly) {
+      setFocusOnly(false);
+    }
+  }, [aiFocus, focusOnly]);
+
+  useEffect(() => {
+    if (!workspacePages.length) {
+      const defaults = createDefaultWorkspacePages();
+      setWorkspacePages(defaults);
+      setActiveWorkspacePageId(defaults[0]?.id || "");
+      return;
+    }
+    if (!activeWorkspacePageId || !workspacePages.some(page => page.id === activeWorkspacePageId)) {
+      setActiveWorkspacePageId(workspacePages[0]?.id || "");
+    }
+  }, [workspacePages, activeWorkspacePageId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (gapiScriptLoaded.current && (window as any).gapi) {
+      setGapiReady(true);
+      return;
+    }
+    if (document.querySelector('script[data-google-api="true"]')) {
+      gapiScriptLoaded.current = true;
+      if ((window as any).gapi) {
+        setGapiReady(true);
+      }
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://apis.google.com/js/api.js";
+    script.async = true;
+    script.defer = true;
+    script.dataset.googleApi = "true";
+    script.onload = () => {
+      gapiScriptLoaded.current = true;
+      setGapiReady(true);
+    };
+    script.onerror = () => {
+      gapiScriptLoaded.current = true;
+      setGapiReady(false);
+      setGcalState(prev => ({
+        ...prev,
+        status: prev.status === "connected" ? prev.status : "error",
+        message: prev.message || "No se pudo cargar Google API",
+      }));
+    };
+    document.body.appendChild(script);
+  }, [setGcalState]);
+
+  const registerProject = useCallback((name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const normalized = trimmed.toLocaleLowerCase();
+    setProjects(prev => {
+      if (prev.some(p => p.toLocaleLowerCase() === normalized)) {
+        return prev;
+      }
+      const set = new Set<string>([...DEFAULT_PROJECTS, ...prev, trimmed]);
+      const next = Array.from(set).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    setProjects(prev => {
+      const set = new Set<string>([...DEFAULT_PROJECTS, ...prev]);
+      goals.forEach(g => set.add(g.project));
+      tasks.forEach(t => set.add(t.project));
+      const next = Array.from(set).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+      if (next.length === prev.length && next.every((value, index) => value === prev[index])) {
+        return prev;
+      }
+      return next;
+    });
+  }, [goals, tasks]);
 
   // Tema
   useEffect(() => {
@@ -236,11 +1233,49 @@ export default function Dashboard() {
 
   // ====== Derivados ======
   const t = strings[cfg.lang];
-  const pendingTasks = useMemo(() => tasks.filter(t => !t.done).sort((a,b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999")), [tasks]);
-  const completedToday = useMemo(() => {
-    const today = todayISO().slice(0,10);
-    return tasks.filter(t => t.done && t.createdAt.slice(0,10) === today);
-  }, [tasks]);
+  const todayKey = todayISO().slice(0, 10);
+  const defaultProject = projects[0] ?? "General";
+  const focusTodayIds = useMemo(() => new Set(aiFocus.date === todayKey ? aiFocus.taskIds : []), [aiFocus, todayKey]);
+  const activeWorkspacePage = useMemo(() => {
+    if (!workspacePages.length) return null;
+    return workspacePages.find(page => page.id === activeWorkspacePageId) ?? workspacePages[0];
+  }, [workspacePages, activeWorkspacePageId]);
+  const priorityOrder: Record<Task["priority"], number> = { high: 0, med: 1, low: 2 };
+  const visibleTasks = useMemo(() => {
+    const normalized = taskSearch.trim().toLowerCase();
+    return tasks
+      .filter(task => (showCompletedTasks ? true : !task.done))
+      .filter(task => (taskProjectFilter === "all" ? true : task.project === taskProjectFilter))
+      .filter(task => (taskPriorityFilter === "all" ? true : task.priority === taskPriorityFilter))
+      .filter(task => (!focusOnly ? true : focusTodayIds.has(task.id)))
+      .filter(task => {
+        if (!normalized) return true;
+        return `${task.title} ${task.project}`.toLowerCase().includes(normalized);
+      })
+      .sort((a, b) => {
+        if (a.done !== b.done) return a.done ? 1 : -1;
+        const dueA = a.dueDate ? a.dueDate.slice(0, 10) : "9999-12-31";
+        const dueB = b.dueDate ? b.dueDate.slice(0, 10) : "9999-12-31";
+        if (dueA !== dueB) return dueA.localeCompare(dueB);
+        if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+          return priorityOrder[a.priority] - priorityOrder[b.priority];
+        }
+        return a.title.localeCompare(b.title, "es", { sensitivity: "base" });
+      });
+  }, [tasks, showCompletedTasks, taskProjectFilter, taskPriorityFilter, taskSearch, focusOnly, focusTodayIds]);
+
+  const aiSnapshot = useMemo(
+    () =>
+      buildAiEngineSnapshot({
+        tasks,
+        goals,
+        reviews,
+        lang: cfg.lang,
+        capacityMinutes: cfg.dailyCapacityMin,
+        minimumSlots: cfg.dailyMinSlots,
+      }),
+    [tasks, goals, reviews, cfg.lang, cfg.dailyCapacityMin, cfg.dailyMinSlots],
+  );
 
   const weeklyScores = useMemo(() => {
     const now = new Date(todayISO());
@@ -275,6 +1310,7 @@ export default function Dashboard() {
 
   // ====== Acciones ======
   function addGoal(g: Omit<Goal, "id" | "createdAt" | "history">) {
+    registerProject(g.project);
     setGoals(prev => [...prev, { id: uuidv4(), createdAt: todayISO(), history: [], ...g }]);
   }
 
@@ -283,12 +1319,69 @@ export default function Dashboard() {
   }
 
   function addTask(t: Omit<Task, "id" | "createdAt" | "done">) {
+    registerProject(t.project);
     setTasks(prev => [{ id: uuidv4(), createdAt: todayISO(), done: false, priority: "med", ...t }, ...prev]);
   }
 
   function toggleTask(id: string) {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t));
   }
+
+  function updateTask(id: string, patch: Partial<Task>) {
+    setTasks(prev => prev.map(task => (task.id === id ? { ...task, ...patch } : task)));
+  }
+
+  function removeTask(id: string) {
+    setTasks(prev => prev.filter(t => t.id !== id));
+    setAiFocus(prev =>
+      prev.date === todayKey ? { ...prev, taskIds: prev.taskIds.filter(taskId => taskId !== id) } : prev,
+    );
+    setEditingTask(prev => (prev && prev.id === id ? null : prev));
+  }
+
+  const applyAiPlan = useCallback((snapshot: AiEngineSnapshot) => {
+    if (!snapshot.plan.length) return;
+    const todayIso = todayISO();
+    const existingSelections = snapshot.plan.filter(item => item.kind === "existing" && item.existingTaskId);
+    const map = new Map(existingSelections.map(item => [item.existingTaskId!, item]));
+    const suggestions = snapshot.plan.filter(item => item.kind === "suggested");
+    suggestions.forEach(item => registerProject(item.project));
+    const newTasks = suggestions.map(item => ({
+      id: uuidv4(),
+      title: item.title,
+      project: item.project,
+      estimateMin: item.estimateMin,
+      points: Math.max(10, Math.round(item.estimateMin / 15) * 5),
+      done: false,
+      createdAt: todayIso,
+      dueDate: todayIso,
+      priority: "med" as const,
+      notes: item.reason,
+    }));
+
+    const focusIds: string[] = [];
+    setTasks(prev => {
+      const updated = prev.map(task => {
+        const selected = map.get(task.id);
+        if (!selected) return task;
+        focusIds.push(task.id);
+        const currentDue = task.dueDate && task.dueDate.slice(0, 10) <= todayIso.slice(0, 10) ? task.dueDate : todayIso;
+        const reasonTag = selected.reason;
+        const alreadyTagged = reasonTag && task.notes?.includes(reasonTag);
+        return {
+          ...task,
+          dueDate: currentDue,
+          priority: "high",
+          notes: reasonTag && !alreadyTagged ? [task.notes, `IA: ${reasonTag}`].filter(Boolean).join("\n") : task.notes,
+        };
+      });
+      if (newTasks.length === 0) return updated;
+      newTasks.forEach(t => focusIds.push(t.id));
+      return [...newTasks, ...updated];
+    });
+
+    setAiFocus({ date: todayIso.slice(0, 10), taskIds: focusIds, summary: snapshot.summary });
+  }, [registerProject]);
 
   function closeDay(notes?: string) {
     const today = todayISO().slice(0,10);
@@ -319,6 +1412,321 @@ export default function Dashboard() {
     targetDate.setDate(targetDate.getDate() + daysNeeded);
     return `${daysNeeded} días · ${format(targetDate, 'dd/MM/yyyy')}`;
   }
+
+  function updateGoal(id: string, patch: Partial<Goal>) {
+    setGoals(prev => prev.map(goal => (goal.id === id ? { ...goal, ...patch } : goal)));
+  }
+
+  function removeGoal(id: string) {
+    setGoals(prev => prev.filter(goal => goal.id !== id));
+    setEditingGoal(prev => (prev && prev.id === id ? null : prev));
+  }
+
+  function removeGoalProgress(goalId: string, entryIndex: number) {
+    setGoals(prev =>
+      prev.map(goal =>
+        goal.id === goalId
+          ? { ...goal, history: goal.history.filter((_, idx) => idx !== entryIndex) }
+          : goal,
+      ),
+    );
+  }
+
+  function removeProject(name: string) {
+    if (DEFAULT_PROJECTS.includes(name)) {
+      window.alert(t.cannotRemoveDefault);
+      return;
+    }
+    const usage =
+      tasks.filter(task => task.project === name).length +
+      goals.filter(goal => goal.project === name).length;
+    const confirmation =
+      usage > 0
+        ? `${t.removeProject} "${name}" · ${t.confirmRemoveProject.replace("{count}", String(usage))}`
+        : `${t.removeProject} "${name}"?`;
+    if (!window.confirm(confirmation)) return;
+    if (usage > 0) {
+      setTasks(prev => prev.map(task => (task.project === name ? { ...task, project: "General" } : task)));
+      setGoals(prev => prev.map(goal => (goal.project === name ? { ...goal, project: "General" } : goal)));
+    }
+    setProjects(prev => prev.filter(project => project !== name));
+  }
+
+  const createWorkspacePage = useCallback(
+    (template: WorkspaceTemplateKey) => {
+      const now = new Date().toISOString();
+      const color = WORKSPACE_COLORS[Math.floor(Math.random() * WORKSPACE_COLORS.length)];
+      const iconMap: Record<WorkspaceTemplateKey, string> = {
+        blank: "📄",
+        daily: "🌅",
+        project: "🗂️",
+        knowledge: "🧠",
+      };
+      const titleMap: Record<WorkspaceTemplateKey, string> = {
+        blank: t.workspaceTemplateBlankTitle,
+        daily: t.workspaceTemplateDailyTitle,
+        project: t.workspaceTemplateProjectTitle,
+        knowledge: t.workspaceTemplateKnowledgeTitle,
+      };
+      const descMap: Record<WorkspaceTemplateKey, string> = {
+        blank: t.workspaceTemplateBlankDescription,
+        daily: t.workspaceTemplateDailyDescription,
+        project: t.workspaceTemplateProjectDescription,
+        knowledge: t.workspaceTemplateKnowledgeDescription,
+      };
+      const tagMap: Record<WorkspaceTemplateKey, string[]> = {
+        blank: ["notes"],
+        daily: ["daily", "ritual"],
+        project: ["project", "roadmap"],
+        knowledge: ["knowledge", "ideas"],
+      };
+      const buildBlocks = (): WorkspaceBlock[] => {
+        switch (template) {
+          case "daily":
+            return [
+              { id: uuidv4(), type: "heading", text: t.workspaceBlockToday, accent: "emerald" },
+              { id: uuidv4(), type: "todo", text: t.workspaceBlockDailyFocus, checked: false },
+              { id: uuidv4(), type: "todo", text: t.workspaceBlockDailySecondary, checked: false },
+              { id: uuidv4(), type: "todo", text: t.workspaceBlockSharpen, checked: false },
+              { id: uuidv4(), type: "divider", text: "" },
+              { id: uuidv4(), type: "heading", text: t.workspaceBlockHighlights, accent: "sky" },
+              { id: uuidv4(), type: "text", text: t.workspaceBlockHighlightsHint },
+            ];
+          case "project":
+            return [
+              { id: uuidv4(), type: "heading", text: t.workspaceBlockNorthStar, accent: "violet" },
+              { id: uuidv4(), type: "text", text: t.workspaceBlockNorthStarHint },
+              { id: uuidv4(), type: "heading", text: t.workspaceBlockRoadmap, accent: "emerald" },
+              { id: uuidv4(), type: "todo", text: t.workspaceBlockMilestoneOne, checked: false },
+              { id: uuidv4(), type: "todo", text: t.workspaceBlockMilestoneTwo, checked: false },
+              { id: uuidv4(), type: "todo", text: t.workspaceBlockMilestoneThree, checked: false },
+              { id: uuidv4(), type: "divider", text: "" },
+              { id: uuidv4(), type: "heading", text: t.workspaceBlockResources, accent: "sky" },
+              { id: uuidv4(), type: "text", text: t.workspaceBlockResourcesHint },
+            ];
+          case "knowledge":
+            return [
+              { id: uuidv4(), type: "heading", text: t.workspaceBlockQuestions, accent: "amber" },
+              { id: uuidv4(), type: "text", text: t.workspaceBlockQuestionsHint },
+              { id: uuidv4(), type: "heading", text: t.workspaceBlockIdeas, accent: "emerald" },
+              { id: uuidv4(), type: "text", text: t.workspaceBlockIdeasHint },
+              { id: uuidv4(), type: "heading", text: t.workspaceBlockReferences, accent: "sky" },
+              { id: uuidv4(), type: "text", text: t.workspaceBlockReferencesHint },
+            ];
+          default:
+            return [
+              { id: uuidv4(), type: "heading", text: t.workspaceBlockBlankHeading, accent: "slate" },
+              { id: uuidv4(), type: "text", text: t.workspaceBlockBlankHint },
+            ];
+        }
+      };
+      const page: WorkspacePage = {
+        id: uuidv4(),
+        icon: iconMap[template] ?? "📄",
+        title: titleMap[template],
+        description: descMap[template],
+        color,
+        createdAt: now,
+        updatedAt: now,
+        tags: tagMap[template],
+        favorite: template !== "blank",
+        blocks: buildBlocks(),
+      };
+      setWorkspacePages(prev => [page, ...prev]);
+      setActiveWorkspacePageId(page.id);
+    },
+    [t],
+  );
+
+  const updateWorkspacePage = useCallback((id: string, patch: Partial<WorkspacePage>) => {
+    setWorkspacePages(prev =>
+      prev.map(page =>
+        page.id === id
+          ? {
+              ...page,
+              ...patch,
+              blocks: patch.blocks ? patch.blocks : page.blocks,
+              updatedAt: new Date().toISOString(),
+            }
+          : page,
+      ),
+    );
+  }, []);
+
+  const updateWorkspaceBlocks = useCallback(
+    (id: string, blocks: WorkspaceBlock[]) => {
+      updateWorkspacePage(id, { blocks });
+    },
+    [updateWorkspacePage],
+  );
+
+  const toggleWorkspaceFavorite = useCallback((id: string) => {
+    setWorkspacePages(prev =>
+      prev.map(page =>
+        page.id === id
+          ? { ...page, favorite: !page.favorite, updatedAt: new Date().toISOString() }
+          : page,
+      ),
+    );
+  }, []);
+
+  const removeWorkspacePage = useCallback(
+    (id: string) => {
+      setWorkspacePages(prev => {
+        const filtered = prev.filter(page => page.id !== id);
+        if (!filtered.length) {
+          const defaults = createDefaultWorkspacePages();
+          setActiveWorkspacePageId(defaults[0]?.id || "");
+          return defaults;
+        }
+        if (id === activeWorkspacePageId || !filtered.some(page => page.id === activeWorkspacePageId)) {
+          setActiveWorkspacePageId(filtered[0]?.id || "");
+        }
+        return filtered;
+      });
+    },
+    [activeWorkspacePageId],
+  );
+
+  const duplicateWorkspacePage = useCallback(
+    (id: string) => {
+      const source = workspacePages.find(page => page.id === id);
+      if (!source) return;
+      const now = new Date().toISOString();
+      const copy: WorkspacePage = {
+        ...source,
+        id: uuidv4(),
+        title: `${source.title} · ${t.workspaceDuplicateSuffix}`,
+        favorite: false,
+        createdAt: now,
+        updatedAt: now,
+        blocks: source.blocks.map(block => ({ ...block, id: uuidv4() })),
+      };
+      setWorkspacePages(prev => [copy, ...prev]);
+      setActiveWorkspacePageId(copy.id);
+    },
+    [workspacePages, t.workspaceDuplicateSuffix],
+  );
+
+  const updateGcalConfig = useCallback((patch: Partial<GoogleCalendarConfig>) => {
+    setGcalConfig(prev => ({ ...prev, ...patch }));
+  }, []);
+
+  const syncGoogleCalendar = useCallback(
+    async (interactive: boolean) => {
+      if (!gapiReady || typeof window === "undefined" || !(window as any).gapi) {
+        setGcalState(prev => ({
+          ...prev,
+          status: "error",
+          message: t.calendarStatusNoApi,
+        }));
+        return;
+      }
+      const gapi = (window as any).gapi;
+      try {
+        setGcalState(prev => ({ ...prev, status: "loading", message: t.calendarConnecting }));
+        await new Promise<void>((resolve, reject) => {
+          gapi.load("client:auth2", { callback: resolve, onerror: reject });
+        });
+        await gapi.client.init({
+          apiKey: gcalConfig.apiKey,
+          clientId: gcalConfig.clientId,
+          discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"],
+          scope: "https://www.googleapis.com/auth/calendar.readonly",
+        });
+        const auth = gapi.auth2.getAuthInstance();
+        let user = auth.currentUser.get();
+        if (!user || !user.isSignedIn()) {
+          if (interactive) {
+            user = await auth.signIn();
+          } else {
+            try {
+              user = await auth.signIn({ prompt: "none" });
+            } catch {
+              user = auth.currentUser.get();
+            }
+          }
+        }
+        if (!user || !user.isSignedIn()) {
+          if (!interactive) {
+            setGcalState(prev => ({
+              ...prev,
+              status: "error",
+              message: t.calendarAuthRequired,
+            }));
+            return;
+          }
+          user = await auth.signIn();
+        }
+        const profile = user?.getBasicProfile ? user.getBasicProfile() : null;
+        const horizon = new Date();
+        const spanMs = gcalConfig.lookAheadDays * 24 * 60 * 60 * 1000;
+        const timeMin = new Date().toISOString();
+        const timeMax = new Date(horizon.getTime() + spanMs).toISOString();
+        const response = await gapi.client.calendar.events.list({
+          calendarId: gcalConfig.calendarId || "primary",
+          singleEvents: true,
+          orderBy: "startTime",
+          timeMin,
+          timeMax,
+          timeZone: gcalConfig.timeZone,
+          maxResults: 64,
+        });
+        const events = (response.result?.items || []).map((event: any) => ({
+          id: event.id,
+          summary: event.summary || t.calendarUntitled,
+          start: event.start?.dateTime || event.start?.date,
+          end: event.end?.dateTime || event.end?.date || event.start?.dateTime || event.start?.date,
+          location: event.location,
+          hangoutLink: event.hangoutLink || event.conferenceData?.entryPoints?.[0]?.uri,
+          description: event.description,
+        })) as GoogleCalendarEvent[];
+        setGcalState({
+          status: "connected",
+          message: t.calendarSyncedAt.replace("{time}", format(new Date(), "HH:mm")),
+          events,
+          profile: profile
+            ? {
+                name: profile.getName?.(),
+                email: profile.getEmail?.(),
+                avatar: profile.getImageUrl?.(),
+              }
+            : undefined,
+          lastSyncedAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.error(error);
+        setGcalState(prev => ({
+          ...prev,
+          status: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : typeof error === "string"
+              ? error
+              : t.calendarUnknownError,
+        }));
+      }
+    },
+    [gapiReady, gcalConfig, t.calendarConnecting, t.calendarSyncedAt, t.calendarUntitled, t.calendarStatusNoApi, t.calendarAuthRequired, t.calendarUnknownError],
+  );
+
+  const connectGoogleCalendar = useCallback(() => {
+    return syncGoogleCalendar(true);
+  }, [syncGoogleCalendar]);
+
+  const refreshGoogleCalendar = useCallback(() => {
+    return syncGoogleCalendar(false);
+  }, [syncGoogleCalendar]);
+
+  const disconnectGoogleCalendar = useCallback(async () => {
+    if (typeof window !== "undefined" && (window as any).gapi?.auth2) {
+      try {
+        await (window as any).gapi.auth2.getAuthInstance()?.signOut();
+      } catch {}
+    }
+    setGcalState({ status: "idle", events: [], message: t.calendarDisconnected, profile: undefined, lastSyncedAt: undefined });
+  }, [t.calendarDisconnected]);
 
   // ====== Import/Export ======
   function exportAll() {
@@ -366,10 +1774,26 @@ export default function Dashboard() {
 
   // ============== UI ==============
   return (
-    <div className={`min-h-screen w-full ${cfg.theme === 'dark' ? 'bg-neutral-950 text-neutral-100' : 'bg-neutral-50 text-neutral-900'}`}>
-      <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
+    <div
+      className={`relative min-h-screen w-full overflow-hidden ${
+        cfg.theme === 'dark'
+          ? 'bg-neutral-950 text-neutral-100'
+          : 'bg-gradient-to-br from-slate-50 via-white to-sky-50 text-neutral-900'
+      }`}
+    >
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute -top-32 -left-32 h-72 w-72 rounded-full bg-emerald-300/30 blur-3xl animate-pulse" />
+        <div className="absolute top-1/3 right-[-120px] h-80 w-80 rounded-full bg-sky-300/20 blur-3xl animate-[pulse_8s_ease-in-out_infinite]" />
+        <div className="absolute bottom-[-140px] left-1/4 h-96 w-96 rounded-full bg-indigo-300/20 blur-3xl" />
+      </div>
+      <div className="relative mx-auto max-w-6xl space-y-6 p-4 md:p-8">
         <header className="flex items-center justify-between">
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2"><Rocket className="h-6 w-6" />{t.title}</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight md:text-3xl">
+            <Rocket className="h-6 w-6 text-emerald-500 dark:text-emerald-300" />
+            <span className="bg-gradient-to-r from-emerald-500 via-sky-500 to-indigo-500 bg-clip-text text-transparent dark:from-emerald-300 dark:via-sky-400 dark:to-indigo-400">
+              {t.title}
+            </span>
+          </h1>
           <div className="flex items-center gap-3 text-sm">
             <span>{t.today}: {format(new Date(), 'dd/MM/yyyy')}</span>
             <ThemeToggle cfg={cfg} setCfg={setCfg} t={t} />
@@ -419,36 +1843,91 @@ export default function Dashboard() {
         </div>
 
         <Tabs defaultValue="tasks" className="w-full">
-          <TabsList className="flex flex-wrap gap-2">
-            <TabsTrigger value="tasks">{t.tasks}</TabsTrigger>
-            <TabsTrigger value="goals">{t.goals}</TabsTrigger>
-            <TabsTrigger value="week">{t.week}</TabsTrigger>
-            <TabsTrigger value="backlog">{t.backlog}</TabsTrigger>
-            <TabsTrigger value="focus">{t.focus}</TabsTrigger>
-            <TabsTrigger value="templates">{t.templates}</TabsTrigger>
-            <TabsTrigger value="review">{t.review}</TabsTrigger>
-            <TabsTrigger value="settings"><Settings className="h-4 w-4" /></TabsTrigger>
-          </TabsList>
+        <TabsList className="flex flex-wrap gap-2">
+          <TabsTrigger value="tasks">{t.tasks}</TabsTrigger>
+          <TabsTrigger value="goals">{t.goals}</TabsTrigger>
+          <TabsTrigger value="week">{t.week}</TabsTrigger>
+          <TabsTrigger value="workspace" className="flex items-center gap-1">
+            <LayoutDashboard className="h-4 w-4" /> {t.workspace}
+          </TabsTrigger>
+          <TabsTrigger value="coach">{t.aiCoach}</TabsTrigger>
+          <TabsTrigger value="calendar" className="flex items-center gap-1">
+            <CalendarDays className="h-4 w-4" /> {t.calendar}
+          </TabsTrigger>
+          <TabsTrigger value="backlog">{t.backlog}</TabsTrigger>
+          <TabsTrigger value="focus">{t.focus}</TabsTrigger>
+          <TabsTrigger value="templates">{t.templates}</TabsTrigger>
+          <TabsTrigger value="review">{t.review}</TabsTrigger>
+          <TabsTrigger value="settings"><Settings className="h-4 w-4" /></TabsTrigger>
+        </TabsList>
 
           {/* ====== TAREAS ====== */}
           <TabsContent value="tasks" className="mt-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card className="md:col-span-2">
                 <CardHeader className="pb-2"><CardTitle>{t.pending}</CardTitle></CardHeader>
-                <CardContent className="space-y-3">
-                  <QuickAdd onAdd={(title) => addTask({ title, project: 'General', estimateMin: 30, points: 20 })} label={t.quickAdd} />
-                  {pendingTasks.length === 0 && (
-                    <div className="text-sm text-neutral-500">{t.emptyTasks}</div>
-                  )}
-                  {pendingTasks.map(task => (
-                    <TaskRow key={task.id} task={task} toggle={toggleTask} />
-                  ))}
+                <CardContent className="space-y-4">
+                  <TaskFilters
+                    t={t}
+                    projects={projects}
+                    projectValue={taskProjectFilter}
+                    onProjectChange={setTaskProjectFilter}
+                    priorityValue={taskPriorityFilter}
+                    onPriorityChange={setTaskPriorityFilter}
+                    searchValue={taskSearch}
+                    onSearchChange={setTaskSearch}
+                    showCompleted={showCompletedTasks}
+                    onToggleCompleted={setShowCompletedTasks}
+                    focusOnly={focusOnly}
+                    onToggleFocus={setFocusOnly}
+                    onReset={() => {
+                      setTaskProjectFilter("all");
+                      setTaskPriorityFilter("all");
+                      setTaskSearch("");
+                      setShowCompletedTasks(false);
+                      setFocusOnly(false);
+                    }}
+                  />
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <QuickAdd onAdd={(title) => addTask({ title, project: defaultProject, estimateMin: 30, points: 20 })} label={t.quickAdd} />
+                    <div className="flex flex-wrap gap-2">
+                      <BulkTaskDialog
+                        t={t}
+                        projects={projects}
+                        onAddProject={registerProject}
+                        onSubmit={(items) => {
+                          items.forEach(item => addTask(item));
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {visibleTasks.length === 0 && (
+                      <div className="text-sm text-neutral-500">{t.emptyTasks}</div>
+                    )}
+                    {visibleTasks.map(task => (
+                      <TaskRow
+                        key={task.id}
+                        task={task}
+                        toggle={toggleTask}
+                        focus={focusTodayIds.has(task.id)}
+                        focusLabel={t.aiFocusBadge}
+                        onEdit={() => setEditingTask(task)}
+                        onDelete={() => {
+                          if (window.confirm(t.confirmDeleteTask)) {
+                            removeTask(task.id);
+                          }
+                        }}
+                        t={t}
+                      />
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="pb-2"><CardTitle>{t.newTask}</CardTitle></CardHeader>
-                <TaskForm onCreate={addTask} t={t} />
+                <TaskForm onCreate={addTask} t={t} projects={projects} onAddProject={registerProject} />
               </Card>
             </div>
           </TabsContent>
@@ -460,46 +1939,122 @@ export default function Dashboard() {
                 <CardHeader className="pb-2"><CardTitle>{t.activeGoals}</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
                   {goals.length === 0 && <div className="text-sm text-neutral-500">Sin metas no hay milagros.</div>}
-                  {goals.map(g => (
-                    <div key={g.id} className="rounded-2xl border p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-semibold">{g.title}</div>
-                          <div className="text-xs text-neutral-500">{g.project} · objetivo: {g.targetUnits} {g.unitLabel}{g.dueDate ? ` · ${t.due} ${format(new Date(g.dueDate), 'dd/MM')}` : ''}</div>
+                  {goals.map(g => {
+                    const totalUnits = g.history.reduce((acc, entry) => acc + entry.units, 0);
+                    const completion = g.targetUnits ? Math.min(100, (totalUnits / g.targetUnits) * 100) : 0;
+                    return (
+                      <div key={g.id} className="relative overflow-hidden rounded-2xl border border-neutral-200 bg-white/90 p-3 shadow-sm transition-all duration-200 dark:border-neutral-700 dark:bg-neutral-900/70">
+                        <div className="absolute inset-0 -z-10 bg-gradient-to-br from-emerald-200/30 via-transparent to-sky-200/30 dark:from-emerald-500/10 dark:to-sky-500/10" />
+                        <div className="space-y-3">
+                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                            <div>
+                              <div className="text-lg font-semibold leading-tight">{g.title}</div>
+                              <div className="text-xs text-neutral-500 dark:text-neutral-400">{g.project} · {t.goalProgress}: {totalUnits} / {g.targetUnits} {g.unitLabel}{g.dueDate ? ` · ${t.due} ${format(new Date(g.dueDate), 'dd/MM')}` : ''}</div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary">{t.eta}: {etaForGoal(g)}</Badge>
+                              <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="icon" onClick={() => setEditingGoal(g)} aria-label={`${t.edit} ${g.title}`}><Pencil className="h-4 w-4" /></Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    if (window.confirm(t.confirmDeleteGoal)) {
+                                      removeGoal(g.id);
+                                    }
+                                  }}
+                                  aria-label={`${t.delete} ${g.title}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between text-xs font-medium text-neutral-600 dark:text-neutral-300">
+                              <span>{Math.round(completion)}%</span>
+                              <span>{totalUnits} / {g.targetUnits} {g.unitLabel}</span>
+                            </div>
+                            <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
+                              <div
+                                className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-emerald-500 to-sky-500 transition-all"
+                                style={{ width: `${Math.min(100, completion)}%` }}
+                              />
+                            </div>
+                          </div>
+                          <GoalMiniChart goal={g} t={t} />
+                          <div className="space-y-2">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">{t.historyEntries}</div>
+                            <GoalHistoryList goal={g} t={t} onRemove={(index) => removeGoalProgress(g.id, index)} />
+                          </div>
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                            <div className="grow">
+                              <Label className="text-xs">Registrar avance de hoy ({g.unitLabel})</Label>
+                              <Input type="number" min={0} step={1} placeholder={`ej. 3`} onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  const v = Number((e.target as HTMLInputElement).value);
+                                  if (!isNaN(v) && v >= 0) {
+                                    logGoalProgress(g.id, v);
+                                    (e.target as HTMLInputElement).value = '';
+                                  }
+                                }
+                              }} />
+                            </div>
+                            <Button onClick={() => logGoalProgress(g.id, 1)}>+1</Button>
+                          </div>
                         </div>
-                        <Badge variant="secondary">{t.eta}: {etaForGoal(g)}</Badge>
                       </div>
-                      <GoalMiniChart goal={g} t={t} />
-                      <div className="flex items-end gap-2">
-                        <div className="grow">
-                          <Label className="text-xs">Registrar avance de hoy ({g.unitLabel})</Label>
-                          <Input type="number" min={0} step={1} placeholder={`ej. 3`} onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              const v = Number((e.target as HTMLInputElement).value);
-                              if (!isNaN(v) && v >= 0) {
-                                logGoalProgress(g.id, v);
-                                (e.target as HTMLInputElement).value = '';
-                              }
-                            }
-                          }} />
-                        </div>
-                        <Button onClick={() => logGoalProgress(g.id, 1)}>+1</Button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="pb-2"><CardTitle>{t.newGoal}</CardTitle></CardHeader>
-                <GoalForm onCreate={addGoal} t={t} />
+                <GoalForm onCreate={addGoal} t={t} projects={projects} onAddProject={registerProject} />
               </Card>
             </div>
           </TabsContent>
 
           {/* ====== SEMANA ====== */}
           <TabsContent value="week" className="mt-4">
-            <WeekPlan tasks={tasks} addTask={addTask} t={t} />
+            <WeekPlan tasks={tasks} addTask={addTask} t={t} defaultProject={defaultProject} />
+          </TabsContent>
+
+          {/* ====== WORKSPACE ====== */}
+          <TabsContent value="workspace" className="mt-4">
+            <WorkspaceStudio
+              pages={workspacePages}
+              activePage={activeWorkspacePage}
+              activePageId={activeWorkspacePageId}
+              onSelectPage={setActiveWorkspacePageId}
+              onCreatePage={createWorkspacePage}
+              onUpdatePage={updateWorkspacePage}
+              onUpdateBlocks={updateWorkspaceBlocks}
+              onRemovePage={removeWorkspacePage}
+              onDuplicatePage={duplicateWorkspacePage}
+              onToggleFavorite={toggleWorkspaceFavorite}
+              t={t}
+            />
+          </TabsContent>
+
+          {/* ====== CALENDARIO ====== */}
+          <TabsContent value="calendar" className="mt-4">
+            <CalendarPane
+              config={gcalConfig}
+              state={gcalState}
+              ready={gapiReady}
+              onConfigChange={updateGcalConfig}
+              onConnect={connectGoogleCalendar}
+              onRefresh={refreshGoogleCalendar}
+              onDisconnect={disconnectGoogleCalendar}
+              t={t}
+            />
+          </TabsContent>
+
+          {/* ====== MOTOR IA ====== */}
+          <TabsContent value="coach" className="mt-4">
+            <AIPlanner snapshot={aiSnapshot} onApply={() => applyAiPlan(aiSnapshot)} focusState={aiFocus} t={t} />
           </TabsContent>
 
           {/* ====== BACKLOG ====== */}
@@ -514,7 +2069,15 @@ export default function Dashboard() {
 
           {/* ====== PLANTILLAS ====== */}
           <TabsContent value="templates" className="mt-4">
-            <Templates addTask={addTask} addGoal={addGoal} />
+            <Templates
+              addTask={addTask}
+              addGoal={addGoal}
+              projects={projects}
+              onAddProject={registerProject}
+              t={t}
+              defaultProject={defaultProject}
+              lang={cfg.lang}
+            />
           </TabsContent>
 
           {/* ====== CIERRE DEL DÍA ====== */}
@@ -527,7 +2090,7 @@ export default function Dashboard() {
                   <DialogTrigger asChild>
                     <Button size="lg">{t.grade}</Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="max-w-2xl rounded-3xl border border-neutral-200/70 bg-white/95 shadow-2xl backdrop-blur-xl dark:border-neutral-800/70 dark:bg-neutral-950/90">
                     <DialogHeader>
                       <DialogTitle>{t.review}</DialogTitle>
                     </DialogHeader>
@@ -552,58 +2115,1398 @@ export default function Dashboard() {
 
           {/* ====== AJUSTES ====== */}
           <TabsContent value="settings" className="mt-4">
-            <SettingsPane cfg={cfg} setCfg={setCfg} exportAll={exportAll} importAll={importAll} t={t} />
+            <SettingsPane
+              cfg={cfg}
+              setCfg={setCfg}
+              exportAll={exportAll}
+              importAll={importAll}
+              t={t}
+              projects={projects}
+              onRemoveProject={removeProject}
+            />
           </TabsContent>
         </Tabs>
 
         {/* Footer */}
         <div className="text-center text-xs text-neutral-500 pt-4">Hecho para ejecutar, no para procrastinar.</div>
+
+        <TaskEditDialog
+          task={editingTask}
+          open={!!editingTask}
+          onClose={() => setEditingTask(null)}
+          onSubmit={updateTask}
+          projects={projects}
+          onAddProject={registerProject}
+          t={t}
+        />
+        <GoalEditDialog
+          goal={editingGoal}
+          open={!!editingGoal}
+          onClose={() => setEditingGoal(null)}
+          onSubmit={updateGoal}
+          projects={projects}
+          onAddProject={registerProject}
+          t={t}
+        />
       </div>
     </div>
   );
 }
 
 // ============== Subcomponentes ==============
+function WorkspaceStudio({
+  pages,
+  activePage,
+  activePageId,
+  onSelectPage,
+  onCreatePage,
+  onUpdatePage,
+  onUpdateBlocks,
+  onRemovePage,
+  onDuplicatePage,
+  onToggleFavorite,
+  t,
+}: {
+  pages: WorkspacePage[];
+  activePage: WorkspacePage | null;
+  activePageId: string | null;
+  onSelectPage: (id: string) => void;
+  onCreatePage: (template: WorkspaceTemplateKey) => void;
+  onUpdatePage: (id: string, patch: Partial<WorkspacePage>) => void;
+  onUpdateBlocks: (id: string, blocks: WorkspaceBlock[]) => void;
+  onRemovePage: (id: string) => void;
+  onDuplicatePage: (id: string) => void;
+  onToggleFavorite: (id: string) => void;
+  t: any;
+}) {
+  const [search, setSearch] = useState("");
+  const [tagFilter, setTagFilter] = useState<string>("all");
+
+  const templateOptions = useMemo(
+    () => [
+      { key: "daily" as WorkspaceTemplateKey, label: t.workspaceTemplateDailyName },
+      { key: "project" as WorkspaceTemplateKey, label: t.workspaceTemplateProjectName },
+      { key: "knowledge" as WorkspaceTemplateKey, label: t.workspaceTemplateKnowledgeName },
+      { key: "blank" as WorkspaceTemplateKey, label: t.workspaceNewPage },
+    ],
+    [t.workspaceTemplateDailyName, t.workspaceTemplateProjectName, t.workspaceTemplateKnowledgeName, t.workspaceNewPage],
+  );
+
+  const tags = useMemo(() => {
+    const set = new Set<string>();
+    pages.forEach(page => page.tags.forEach(tag => set.add(tag)));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+  }, [pages]);
+
+  const filteredPages = useMemo(() => {
+    const normalized = search.trim().toLowerCase();
+    const tag = tagFilter.toLowerCase();
+    return pages
+      .filter(page => (tagFilter === "all" ? true : page.tags.some(tg => tg.toLowerCase() === tag)))
+      .filter(page =>
+        normalized
+          ? `${page.title} ${page.description ?? ""} ${page.tags.join(" ")}`
+              .toLowerCase()
+              .includes(normalized)
+          : true,
+      )
+      .sort((a, b) => {
+        if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      });
+  }, [pages, search, tagFilter]);
+
+  const renderPageButton = (page: WorkspacePage) => {
+    const styles = WORKSPACE_COLOR_STYLES[page.color] ?? WORKSPACE_COLOR_STYLES.default;
+    const isActive = activePageId === page.id;
+    return (
+      <button
+        key={page.id}
+        onClick={() => onSelectPage(page.id)}
+        className={`group relative w-full rounded-2xl border border-neutral-200/70 bg-gradient-to-br ${
+          styles.bg
+        } p-3 text-left transition-all hover:-translate-y-[2px] hover:shadow-lg dark:border-neutral-800/70 ${
+          isActive ? `${styles.ring} ring-2` : ""
+        }`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className={`flex items-center gap-2 text-sm font-semibold ${styles.text}`}>
+            <span className="text-base">{page.icon}</span>
+            <span className="line-clamp-1">{page.title}</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+            {page.favorite && (
+              <Badge variant="secondary" className="bg-amber-500/20 text-amber-600 dark:text-amber-200">
+                <Star className="mr-1 h-3 w-3 fill-current" />
+                {t.workspaceFavorite}
+              </Badge>
+            )}
+            <span>
+              {t.workspaceLastEdited}: {format(new Date(page.updatedAt), "dd MMM HH:mm")}
+            </span>
+          </div>
+        </div>
+        {page.tags.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1 text-[11px]">
+            {page.tags.map(tag => (
+              <span key={tag} className={`rounded-full px-2 py-0.5 ${styles.pill}`}>
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
+        {page.description && (
+          <div className="mt-2 text-xs text-neutral-600 dark:text-neutral-300 line-clamp-2">
+            {page.description}
+          </div>
+        )}
+      </button>
+    );
+  };
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[280px,1fr]">
+      <Card className="h-full">
+        <CardHeader className="space-y-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <BookOpen className="h-4 w-4" /> {t.workspacePages}
+          </CardTitle>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">{t.workspaceSidebarHint}</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {templateOptions.map(option => (
+              <Button
+                key={option.key}
+                size="sm"
+                variant="secondary"
+                onClick={() => onCreatePage(option.key)}
+                className="flex items-center gap-1 rounded-full bg-white/80 shadow-sm transition hover:-translate-y-[1px] dark:bg-neutral-900/70"
+              >
+                <Plus className="h-3.5 w-3.5" /> {option.label}
+              </Button>
+            ))}
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              {t.workspaceSearchPlaceholder}
+            </Label>
+            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.workspaceSearchPlaceholder} />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              {t.workspaceTagsLabel}
+            </Label>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant={tagFilter === "all" ? "default" : "ghost"}
+                onClick={() => setTagFilter("all")}
+                className="rounded-full"
+              >
+                {t.workspaceFilterAll}
+              </Button>
+              {tags.map(tag => (
+                <Button
+                  key={tag}
+                  size="sm"
+                  variant={tagFilter === tag ? "default" : "ghost"}
+                  onClick={() => setTagFilter(tag)}
+                  className="rounded-full"
+                >
+                  #{tag}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
+            {filteredPages.length === 0 ? (
+              <div className="rounded-2xl border border-dashed p-4 text-sm text-neutral-500 dark:text-neutral-400">
+                {pages.length === 0 ? t.workspaceCreateFirst : t.workspaceEmpty}
+              </div>
+            ) : (
+              filteredPages.map(renderPageButton)
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="space-y-4">
+        {activePage ? (
+          <WorkspacePageView
+            page={activePage}
+            onUpdatePage={onUpdatePage}
+            onUpdateBlocks={onUpdateBlocks}
+            onRemovePage={onRemovePage}
+            onDuplicatePage={onDuplicatePage}
+            onToggleFavorite={onToggleFavorite}
+            t={t}
+          />
+        ) : (
+          <Card className="h-full">
+            <CardContent className="flex h-full flex-col items-center justify-center gap-3 text-center">
+              <Sparkles className="h-10 w-10 text-emerald-400" />
+              <div className="text-lg font-semibold">{t.workspace}</div>
+              <p className="max-w-sm text-sm text-neutral-500 dark:text-neutral-400">{t.workspaceCreateFirst}</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WorkspacePageView({
+  page,
+  onUpdatePage,
+  onUpdateBlocks,
+  onRemovePage,
+  onDuplicatePage,
+  onToggleFavorite,
+  t,
+}: {
+  page: WorkspacePage;
+  onUpdatePage: (id: string, patch: Partial<WorkspacePage>) => void;
+  onUpdateBlocks: (id: string, blocks: WorkspaceBlock[]) => void;
+  onRemovePage: (id: string) => void;
+  onDuplicatePage: (id: string) => void;
+  onToggleFavorite: (id: string) => void;
+  t: any;
+}) {
+  const [title, setTitle] = useState(page.title);
+  const [description, setDescription] = useState(page.description ?? "");
+  const [icon, setIcon] = useState(page.icon);
+  const [tagsText, setTagsText] = useState(page.tags.join(", "));
+
+  useEffect(() => {
+    setTitle(page.title);
+    setDescription(page.description ?? "");
+    setIcon(page.icon);
+    setTagsText(page.tags.join(", "));
+  }, [page.id, page.title, page.description, page.icon, page.tags]);
+
+  const styles = WORKSPACE_COLOR_STYLES[page.color] ?? WORKSPACE_COLOR_STYLES.default;
+  const quickIcons = ["🚀", "🎯", "🧠", "📚", "💡", "📝", "🗂️", "🌿", "💻"];
+
+  const handleTagsBlur = () => {
+    const tags = tagsText
+      .split(",")
+      .map(tag => tag.trim())
+      .filter(Boolean);
+    onUpdatePage(page.id, { tags });
+  };
+
+  const gradientByColor: Record<string, string> = {
+    emerald: "linear-gradient(135deg, rgba(16,185,129,0.7) 0%, rgba(56,189,248,0.35) 100%)",
+    sky: "linear-gradient(135deg, rgba(56,189,248,0.7) 0%, rgba(14,165,233,0.35) 100%)",
+    violet: "linear-gradient(135deg, rgba(139,92,246,0.7) 0%, rgba(59,130,246,0.35) 100%)",
+    amber: "linear-gradient(135deg, rgba(245,158,11,0.75) 0%, rgba(251,191,36,0.45) 100%)",
+    rose: "linear-gradient(135deg, rgba(244,114,182,0.7) 0%, rgba(244,63,94,0.35) 100%)",
+    slate: "linear-gradient(135deg, rgba(148,163,184,0.7) 0%, rgba(100,116,139,0.35) 100%)",
+  };
+
+  const handleAddBlock = (type: WorkspaceBlock["type"]) => {
+    const defaultTextMap: Record<WorkspaceBlock["type"], string> = {
+      heading: t.workspaceBlockNewHeading,
+      todo: t.workspaceBlockNewTodo,
+      text: t.workspaceBlockNewText,
+      divider: "",
+    };
+    const block: WorkspaceBlock = {
+      id: uuidv4(),
+      type,
+      text: defaultTextMap[type] ?? "",
+      checked: false,
+      accent: page.color,
+    };
+    onUpdateBlocks(page.id, [...page.blocks, block]);
+  };
+
+  const handleBlockChange = (blockId: string, patch: Partial<WorkspaceBlock>) => {
+    onUpdateBlocks(
+      page.id,
+      page.blocks.map(block => (block.id === blockId ? { ...block, ...patch } : block)),
+    );
+  };
+
+  const handleBlockMove = (blockId: string, direction: -1 | 1) => {
+    const index = page.blocks.findIndex(block => block.id === blockId);
+    if (index < 0) return;
+    const target = index + direction;
+    if (target < 0 || target >= page.blocks.length) return;
+    const next = [...page.blocks];
+    const [item] = next.splice(index, 1);
+    next.splice(target, 0, item);
+    onUpdateBlocks(page.id, next);
+  };
+
+  const handleBlockRemove = (blockId: string) => {
+    onUpdateBlocks(page.id, page.blocks.filter(block => block.id !== blockId));
+  };
+
+  const handleCycleAccent = (blockId: string) => {
+    const index = page.blocks.findIndex(block => block.id === blockId);
+    if (index < 0) return;
+    const current = page.blocks[index];
+    const paletteIndex = WORKSPACE_COLORS.findIndex(color => color === current.accent);
+    const nextColor = WORKSPACE_COLORS[(paletteIndex + 1) % WORKSPACE_COLORS.length];
+    handleBlockChange(blockId, { accent: nextColor });
+  };
+
+  return (
+    <Card className="overflow-hidden">
+      <div className={`h-28 bg-gradient-to-r ${styles.bg}`} />
+      <CardContent className="-mt-16 space-y-6 rounded-t-3xl border border-neutral-200/70 bg-white/90 p-6 shadow-xl backdrop-blur-sm dark:border-neutral-800/60 dark:bg-neutral-950/80">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <Input
+                value={icon}
+                onChange={e => setIcon(e.target.value)}
+                onBlur={() => onUpdatePage(page.id, { icon: icon || "📄" })}
+                className="h-12 w-16 text-2xl"
+                aria-label={t.workspaceIconLabel}
+              />
+              <div className="space-y-2">
+                <Input
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  onBlur={() => onUpdatePage(page.id, { title: title.trim() || t.workspaceTitlePlaceholder })}
+                  placeholder={t.workspaceTitlePlaceholder}
+                  className="text-lg font-semibold"
+                />
+                <Textarea
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  onBlur={() => onUpdatePage(page.id, { description })}
+                  placeholder={t.workspaceDescriptionPlaceholder}
+                  className="min-h-[80px] resize-y"
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+              <span>{t.workspaceColorLabel}</span>
+              {WORKSPACE_COLORS.map(color => (
+                <button
+                  key={color}
+                  className={`h-7 w-7 rounded-full border-2 transition ${
+                    page.color === color ? "border-emerald-500" : "border-transparent"
+                  }`}
+                  style={{ background: gradientByColor[color] ?? gradientByColor.emerald }}
+                  onClick={() => onUpdatePage(page.id, { color })}
+                  aria-label={`${t.workspaceColorLabel} ${color}`}
+                />
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+              <span>{t.workspaceTagsLabel}</span>
+              <Input
+                value={tagsText}
+                onChange={e => setTagsText(e.target.value)}
+                onBlur={handleTagsBlur}
+                placeholder={t.workspaceTagsPlaceholder}
+                className="max-w-sm"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {quickIcons.map(item => (
+                <Button
+                  key={item}
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => {
+                    setIcon(item);
+                    onUpdatePage(page.id, { icon: item });
+                  }}
+                  aria-label={`${t.workspaceIconLabel} ${item}`}
+                >
+                  <span className="text-lg">{item}</span>
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 text-sm text-neutral-500 dark:text-neutral-400">
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant={page.favorite ? "default" : "ghost"}
+                onClick={() => onToggleFavorite(page.id)}
+                className="flex items-center gap-1"
+                aria-label={t.workspaceFavoriteTooltip}
+              >
+                <Star className={`h-4 w-4 ${page.favorite ? "fill-current" : ""}`} />
+                {t.workspaceFavorite}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => onDuplicatePage(page.id)}
+                className="flex items-center gap-1"
+              >
+                <ListPlus className="h-4 w-4" /> {t.workspaceDuplicate}
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => {
+                  if (window.confirm(t.workspaceDeleteConfirm)) {
+                    onRemovePage(page.id);
+                  }
+                }}
+                className="flex items-center gap-1"
+              >
+                <Trash2 className="h-4 w-4" /> {t.workspaceDelete}
+              </Button>
+            </div>
+            <div className="text-xs text-neutral-500 dark:text-neutral-400">
+              {t.workspaceLastEdited}: {format(new Date(page.updatedAt), "dd MMM yyyy · HH:mm")}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm font-semibold">{t.workspaceAddBlock}</div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="secondary" onClick={() => handleAddBlock("heading")}> 
+                <Sparkles className="mr-1 h-3.5 w-3.5" /> {t.workspaceAddHeading}
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => handleAddBlock("todo")}>
+                <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> {t.workspaceAddTodo}
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => handleAddBlock("text")}>
+                <Lightbulb className="mr-1 h-3.5 w-3.5" /> {t.workspaceAddText}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => handleAddBlock("divider")}>
+                <Minus className="mr-1 h-3.5 w-3.5" /> {t.workspaceAddDivider}
+              </Button>
+            </div>
+          </div>
+
+          {page.blocks.length === 0 ? (
+            <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-neutral-500 dark:text-neutral-400">
+              {t.workspaceNoBlocks}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {page.blocks.map((block, index) => (
+                <WorkspaceBlockItem
+                  key={block.id}
+                  block={block}
+                  onChange={patch => handleBlockChange(block.id, patch)}
+                  onRemove={() => handleBlockRemove(block.id)}
+                  onMoveUp={() => handleBlockMove(block.id, -1)}
+                  onMoveDown={() => handleBlockMove(block.id, 1)}
+                  onToggle={() => handleBlockChange(block.id, { checked: !block.checked })}
+                  onCycleAccent={() => handleCycleAccent(block.id)}
+                  isFirst={index === 0}
+                  isLast={index === page.blocks.length - 1}
+                  t={t}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function WorkspaceBlockItem({
+  block,
+  onChange,
+  onRemove,
+  onMoveUp,
+  onMoveDown,
+  onToggle,
+  onCycleAccent,
+  isFirst,
+  isLast,
+  t,
+}: {
+  block: WorkspaceBlock;
+  onChange: (patch: Partial<WorkspaceBlock>) => void;
+  onRemove: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onToggle: () => void;
+  onCycleAccent: () => void;
+  isFirst: boolean;
+  isLast: boolean;
+  t: any;
+}) {
+  const styles = WORKSPACE_COLOR_STYLES[block.accent ?? "default"] ?? WORKSPACE_COLOR_STYLES.default;
+
+  return (
+    <div
+      className={`relative overflow-hidden rounded-2xl border border-neutral-200/70 bg-white/90 p-4 shadow-sm transition-all hover:-translate-y-[2px] hover:shadow-lg dark:border-neutral-800/70 dark:bg-neutral-900/70`}
+    >
+      <div className="absolute inset-0 pointer-events-none opacity-70">
+        <div className={`absolute inset-0 bg-gradient-to-br ${styles.bg}`} />
+      </div>
+      <div className="relative space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <Badge variant="secondary" className={`${styles.pill} capitalize`}>
+            {block.type === "divider" ? t.workspaceDividerLabel : block.type}
+          </Badge>
+          <div className="flex items-center gap-1 text-neutral-500">
+            <Button variant="ghost" size="icon" onClick={onCycleAccent} aria-label={t.workspaceChangeAccent}>
+              <Palette className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={onMoveUp} disabled={isFirst} aria-label="Move block up">
+              <Upload className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={onMoveDown} disabled={isLast} aria-label="Move block down">
+              <Download className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={onRemove} aria-label={t.workspaceDelete}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {block.type === "heading" && (
+          <Input
+            value={block.text}
+            onChange={e => onChange({ text: e.target.value })}
+            className="text-lg font-semibold"
+          />
+        )}
+
+        {block.type === "text" && (
+          <Textarea
+            value={block.text}
+            onChange={e => onChange({ text: e.target.value })}
+            className="min-h-[80px]"
+          />
+        )}
+
+        {block.type === "todo" && (
+          <div className="flex items-start gap-3">
+            <Checkbox checked={!!block.checked} onCheckedChange={onToggle} />
+            <Input
+              value={block.text}
+              onChange={e => onChange({ text: e.target.value })}
+              className="flex-1"
+            />
+          </div>
+        )}
+
+        {block.type === "divider" && <div className="h-px w-full bg-neutral-300 dark:bg-neutral-700" />}
+      </div>
+    </div>
+  );
+}
+
+function CalendarPane({
+  config,
+  state,
+  ready,
+  onConfigChange,
+  onConnect,
+  onRefresh,
+  onDisconnect,
+  t,
+}: {
+  config: GoogleCalendarConfig;
+  state: GoogleCalendarState;
+  ready: boolean;
+  onConfigChange: (patch: Partial<GoogleCalendarConfig>) => void;
+  onConnect: () => void;
+  onRefresh: () => void;
+  onDisconnect: () => void;
+  t: any;
+}) {
+  const statusStyles = {
+    connected: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-200",
+    loading: "bg-sky-500/20 text-sky-700 dark:text-sky-200",
+    error: "bg-rose-500/20 text-rose-700 dark:text-rose-200",
+    idle: "bg-neutral-500/10 text-neutral-600 dark:text-neutral-300",
+  } as const;
+
+  const statusLabel =
+    state.status === "connected"
+      ? t.calendarStatusConnected
+      : state.status === "loading"
+      ? t.calendarStatusLoading
+      : state.status === "error"
+      ? t.calendarStatusError
+      : t.calendarStatusIdle;
+
+  const isConnected = state.status === "connected";
+  const isLoading = state.status === "loading";
+
+  const handleChange = (field: keyof GoogleCalendarConfig) => (value: string) => {
+    if (field === "lookAheadDays") {
+      const parsed = Math.max(1, Math.min(31, Number(value) || config.lookAheadDays));
+      onConfigChange({ lookAheadDays: parsed });
+      return;
+    }
+    onConfigChange({ [field]: value } as Partial<GoogleCalendarConfig>);
+  };
+
+  const renderEvent = (event: GoogleCalendarEvent) => {
+    const rawStart = new Date(event.start);
+    const rawEnd = event.end ? new Date(event.end) : rawStart;
+    const startDate = isNaN(rawStart.getTime()) ? new Date() : rawStart;
+    const endDate = isNaN(rawEnd.getTime()) ? startDate : rawEnd;
+    const allDay = event.start.length <= 10 || (event.start.length > 10 && event.start.endsWith("00:00:00Z"));
+    const dateLabel = allDay
+      ? format(startDate, "EEE dd MMM")
+      : format(startDate, "EEE dd MMM · HH:mm");
+    const timeLabel = allDay
+      ? t.calendarEventAllDay
+      : `${format(startDate, "HH:mm")} → ${format(endDate, "HH:mm")}`;
+
+    return (
+      <div
+        key={event.id}
+        className="rounded-2xl border border-neutral-200/60 bg-gradient-to-br from-slate-50 via-white to-slate-100 p-4 shadow-sm transition hover:-translate-y-[1px] hover:shadow-lg dark:border-neutral-800/60 dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">{event.summary}</div>
+            <div className="text-xs text-neutral-500 dark:text-neutral-400">{dateLabel}</div>
+          </div>
+          <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-200">
+            {timeLabel}
+          </Badge>
+        </div>
+        {event.location && (
+          <div className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">{event.location}</div>
+        )}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {event.hangoutLink && (
+            <a
+              href={event.hangoutLink}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-600 transition hover:bg-sky-500/20 dark:text-sky-300"
+            >
+              <Link2 className="h-3.5 w-3.5" /> {t.calendarOpenEvent}
+            </a>
+          )}
+          {event.description && (
+            <div className="rounded-full bg-neutral-500/10 px-3 py-1 text-xs text-neutral-600 dark:text-neutral-300">
+              {event.description.slice(0, 80)}{event.description.length > 80 ? "…" : ""}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="grid gap-4 xl:grid-cols-[340px,1fr]">
+      <Card>
+        <CardHeader className="space-y-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <CalendarDays className="h-4 w-4" /> {t.calendarHeading}
+          </CardTitle>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">{t.calendarIntro}</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <Badge className={statusStyles[state.status]}>{statusLabel}</Badge>
+            <Badge variant="outline" className="border-sky-400/50 text-sky-600 dark:text-sky-200">
+              {ready ? t.calendarReady : t.calendarNotReady}
+            </Badge>
+            {state.lastSyncedAt && (
+              <span className="text-neutral-500 dark:text-neutral-400">
+                {t.calendarLastSync}: {format(new Date(state.lastSyncedAt), "dd MMM HH:mm")}
+              </span>
+            )}
+          </div>
+
+          {state.message && (
+            <div className="rounded-2xl border border-dashed border-neutral-300/60 bg-white/70 p-3 text-xs text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900/70 dark:text-neutral-300">
+              {state.message}
+            </div>
+          )}
+
+          {state.profile && (
+            <div className="flex items-center gap-3 rounded-2xl border border-neutral-200/70 bg-white/80 p-3 text-sm dark:border-neutral-800/70 dark:bg-neutral-900/70">
+              <div className="h-9 w-9 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700">
+                {state.profile.avatar ? (
+                  <img src={state.profile.avatar} alt={state.profile.name ?? "profile"} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center text-lg">{state.profile.name?.[0] ?? "🌟"}</span>
+                )}
+              </div>
+              <div className="flex flex-col">
+                <span className="font-medium">{state.profile.name}</span>
+                <span className="text-xs text-neutral-500 dark:text-neutral-400">{t.calendarSignedInAs}: {state.profile.email}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={onConnect} disabled={!ready || isLoading} className="flex items-center gap-1">
+              <Sparkles className="h-4 w-4" /> {t.calendarConnect}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={onRefresh}
+              disabled={!isConnected || isLoading}
+              className="flex items-center gap-1"
+            >
+              <RefreshCw className="h-4 w-4" /> {t.calendarRefresh}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={onDisconnect}
+              disabled={state.status === "idle" && state.events.length === 0}
+              className="flex items-center gap-1 text-rose-500 hover:text-rose-600"
+            >
+              <XCircle className="h-4 w-4" /> {t.calendarDisconnect}
+            </Button>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label>{t.calendarApiKey}</Label>
+              <Input
+                value={config.apiKey}
+                onChange={e => handleChange("apiKey")(e.target.value)}
+                placeholder="AIza..."
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>{t.calendarClientId}</Label>
+              <Input
+                value={config.clientId}
+                onChange={e => handleChange("clientId")(e.target.value)}
+                placeholder="xxxx.apps.googleusercontent.com"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>{t.calendarCalendarId}</Label>
+              <Input
+                value={config.calendarId}
+                onChange={e => handleChange("calendarId")(e.target.value)}
+                placeholder="primary"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>{t.calendarTimezone}</Label>
+              <Input
+                value={config.timeZone}
+                onChange={e => handleChange("timeZone")(e.target.value)}
+                placeholder="America/Mexico_City"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>{t.calendarLookAhead}</Label>
+              <Input
+                type="number"
+                min={1}
+                max={31}
+                value={config.lookAheadDays}
+                onChange={e => handleChange("lookAheadDays")(e.target.value)}
+              />
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">{t.calendarLookAheadSuffix}</p>
+            </div>
+          </div>
+
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            {t.calendarHint}{" "}
+            <a
+              href="https://developers.google.com/calendar/api/quickstart/js"
+              target="_blank"
+              rel="noreferrer"
+              className="text-sky-600 underline dark:text-sky-300"
+            >
+              {t.calendarManualLink}
+            </a>
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="min-h-full">
+        <CardHeader className="space-y-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Target className="h-4 w-4" /> {t.calendarUpcoming}
+          </CardTitle>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">{t.calendarInstructions}</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isConnected ? (
+            state.events.length === 0 ? (
+              <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-neutral-500 dark:text-neutral-400">
+                {t.calendarNoEvents}
+              </div>
+            ) : (
+              state.events.map(renderEvent)
+            )
+          ) : (
+            <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-neutral-500 dark:text-neutral-400">
+              {ready ? t.calendarStatusReadyHint : t.calendarNotReady}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function AIPlanner({ snapshot, onApply, focusState, t }: { snapshot: AiEngineSnapshot; onApply: () => void; focusState: AiFocusState; t: any }) {
+  const today = todayISO().slice(0, 10);
+  const planEmpty = snapshot.plan.length === 0;
+  const isApplied = focusState.date === today && focusState.taskIds.length > 0;
+
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <Card className="xl:col-span-2">
+        <CardHeader className="pb-2 space-y-2">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Sparkles className="h-5 w-5" /> {t.aiSummaryTitle}
+          </CardTitle>
+          <div className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-300">
+            {snapshot.summary}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs md:text-sm text-neutral-500">
+            <div>
+              {t.aiPlanLoad}: {snapshot.stats.planMinutes} min · {t.aiCapacityLabel}: {snapshot.stats.capacityMin} min
+            </div>
+            <div className="flex items-center gap-2">
+              {isApplied && (
+                <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> {t.aiPlanApplied}
+                </Badge>
+              )}
+              <Button disabled={planEmpty} onClick={onApply} className="flex items-center gap-2">
+                <Target className="h-4 w-4" /> {isApplied ? t.aiReapplyPlan : t.aiApplyPlan}
+              </Button>
+            </div>
+          </div>
+
+          {isApplied && (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-700 dark:text-emerald-300">
+              <div className="font-semibold flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4" /> {t.aiPlanAppliedHint}
+              </div>
+              {focusState.summary && <div className="mt-1 leading-relaxed">{focusState.summary}</div>}
+            </div>
+          )}
+
+          {planEmpty ? (
+            <div className="rounded-xl border border-dashed p-6 text-center text-sm text-neutral-500">
+              {t.aiNoPlan}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {snapshot.plan.map(item => {
+                const inFocus = item.existingTaskId && isApplied && focusState.taskIds.includes(item.existingTaskId);
+                return (
+                  <div
+                    key={item.id}
+                    className={`rounded-2xl border p-3 transition-colors ${
+                      item.kind === "suggested"
+                        ? "border-amber-400/70 bg-amber-100/60 dark:border-amber-400/40 dark:bg-amber-500/10"
+                        : "border-neutral-200 bg-white/80 dark:border-neutral-800 dark:bg-neutral-900/60"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2 font-semibold">
+                          {item.kind === "existing" ? (
+                            <Focus className="h-4 w-4" />
+                          ) : (
+                            <Lightbulb className="h-4 w-4" />
+                          )}
+                          <span>{item.title}</span>
+                          {item.kind === "suggested" && <Badge variant="secondary">{t.aiSuggested}</Badge>}
+                          {inFocus && (
+                            <Badge variant="outline" className="border-emerald-500 text-emerald-600 dark:text-emerald-300">
+                              {t.aiFocusBadge}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-xs text-neutral-500">
+                          {item.project} · {item.estimateMin} min
+                        </div>
+                        <div className="text-xs leading-snug text-neutral-600 dark:text-neutral-300">
+                          {item.reason}
+                        </div>
+                      </div>
+                      <div className="text-xs font-semibold text-neutral-500">{Math.round(item.score)}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="space-y-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Target className="h-4 w-4" /> {t.aiGoalPulse}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {snapshot.commitments.length === 0 ? (
+              <div className="text-sm text-neutral-500">{t.aiNoGoals}</div>
+            ) : (
+              snapshot.commitments.slice(0, 5).map(commitment => (
+                <div key={commitment.goalId} className="rounded-xl border p-3 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-semibold text-sm">{commitment.goalTitle}</div>
+                    <Badge
+                      variant="outline"
+                      className={`text-xs ${
+                        commitment.urgency === "high"
+                          ? "border-red-500 text-red-600 dark:text-red-300"
+                          : commitment.urgency === "medium"
+                          ? "border-amber-500 text-amber-600 dark:text-amber-300"
+                          : "border-emerald-500 text-emerald-600 dark:text-emerald-300"
+                      }`}
+                    >
+                      {commitment.urgency === "high"
+                        ? t.aiUrgencyHigh
+                        : commitment.urgency === "medium"
+                        ? t.aiUrgencyMedium
+                        : t.aiUrgencyLow}
+                    </Badge>
+                  </div>
+                  {commitment.recommendedUnits > 0 && (
+                    <div className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
+                      {t.aiRecommended}: {commitment.recommendedUnits} {commitment.unitLabel}
+                    </div>
+                  )}
+                  <div className="text-xs leading-snug text-neutral-500 dark:text-neutral-400">
+                    {commitment.message}
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Lightbulb className="h-4 w-4" /> {t.aiSuggestions}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {snapshot.suggestions.length === 0 ? (
+              <div className="text-sm text-neutral-500">{t.aiNoSuggestions}</div>
+            ) : (
+              <ul className="space-y-3">
+                {snapshot.suggestions.map(s => (
+                  <li key={s.id} className="rounded-lg border-l-4 border-neutral-200 bg-neutral-100/70 p-3 dark:border-neutral-700 dark:bg-neutral-900/60">
+                    <div className="text-sm font-semibold">{s.headline}</div>
+                    <div className="text-xs text-neutral-600 dark:text-neutral-400 leading-snug">{s.detail}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 function QuickAdd({ onAdd, label }: { onAdd: (title: string) => void; label: string }) {
   const [val, setVal] = useState("");
   return (
-    <div className="flex gap-2">
-      <Input value={val} onChange={(e)=>setVal(e.target.value)} placeholder={`${label} (Alt+N)`} />
+    <div className="flex w-full flex-col gap-2 sm:flex-row">
+      <Input
+        value={val}
+        onChange={(e)=>setVal(e.target.value)}
+        placeholder={`${label} (Alt+N)`}
+        className="flex-1"
+      />
       <Button onClick={() => { if(val.trim()){ onAdd(val.trim()); setVal(""); } }}>{label}</Button>
     </div>
   );
 }
 
-function TaskRow({ task, toggle }: { task: Task; toggle: (id: string)=>void }) {
+function TaskRow({
+  task,
+  toggle,
+  focus,
+  focusLabel,
+  onEdit,
+  onDelete,
+  t,
+}: {
+  task: Task;
+  toggle: (id: string)=>void;
+  focus?: boolean;
+  focusLabel?: string;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  t: any;
+}) {
+  const workload = Math.min(100, Math.max(10, Math.round((task.estimateMin / 120) * 100)));
+  const priorityStyles: Record<Task["priority"], string> = {
+    high: "border-rose-400/70 bg-gradient-to-r from-rose-100/80 via-transparent to-transparent dark:from-rose-500/20",
+    med: "border-sky-300/70 bg-gradient-to-r from-sky-100/60 via-transparent to-transparent dark:from-sky-500/10",
+    low: "border-amber-200/70 bg-gradient-to-r from-amber-100/50 via-transparent to-transparent dark:from-amber-500/10",
+  };
+  const dueLabel = task.dueDate ? format(new Date(task.dueDate), 'dd/MM') : undefined;
   return (
-    <div className="flex items-start justify-between gap-3 rounded-2xl border p-3">
-      <div className="flex items-start gap-3">
-        <Checkbox checked={task.done} onCheckedChange={() => toggle(task.id)} />
-        <div>
-          <div className="font-medium flex items-center gap-2">
-            {task.title}
-            {task.priority === 'high' && <Badge variant="destructive">HIGH</Badge>}
+    <div
+      className={`relative overflow-hidden rounded-2xl border p-3 shadow-sm transition-all duration-200 ${
+        priorityStyles[task.priority]
+      } ${
+        task.done ? 'opacity-60' : 'hover:-translate-y-[1px] hover:shadow-lg'
+      } ${focus ? 'ring-2 ring-emerald-400/60 dark:ring-emerald-500/50' : ''}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <Checkbox checked={task.done} onCheckedChange={() => toggle(task.id)} />
+          <div className={`space-y-1 ${task.done ? 'line-through text-neutral-400' : ''}`}>
+            <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+              <span>{task.title}</span>
+              {task.priority === 'high' && <Badge variant="destructive">{t.priorityHigh}</Badge>}
+              {task.priority === 'med' && <Badge variant="secondary">{t.priorityMedium}</Badge>}
+              {task.priority === 'low' && <Badge variant="outline">{t.priorityLow}</Badge>}
+              {focus && (
+                <Badge variant="outline" className="border-emerald-500 text-emerald-600 dark:text-emerald-300">
+                  {focusLabel ?? 'Focus IA'}
+                </Badge>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+              <span>{task.project}</span>
+              <span>· {task.estimateMin} min</span>
+              {dueLabel && <span>· {t.due} {dueLabel}</span>}
+            </div>
+            {task.notes && (
+              <div className="whitespace-pre-line text-xs text-neutral-600 dark:text-neutral-300">
+                {task.notes}
+              </div>
+            )}
+            <div className="h-1 w-full overflow-hidden rounded-full bg-white/50 dark:bg-neutral-800">
+              <div
+                className="h-full bg-gradient-to-r from-emerald-400 via-emerald-500 to-sky-500"
+                style={{ width: `${workload}%` }}
+              />
+            </div>
           </div>
-          <div className="text-xs text-neutral-500">{task.project} · {task.estimateMin} min{task.dueDate ? ` · vence ${format(new Date(task.dueDate), 'dd/MM')}` : ''}</div>
-          {task.notes && <div className="text-xs text-neutral-700 mt-1">{task.notes}</div>}
+        </div>
+        <div className="flex flex-col items-end gap-2 text-xs">
+          <Badge>{task.points} pts</Badge>
+          {(onEdit || onDelete) && (
+            <div className="flex items-center gap-1">
+              {onEdit && (
+                <Button variant="ghost" size="icon" onClick={onEdit} aria-label={`${t.edit} ${task.title}`}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
+              {onDelete && (
+                <Button variant="ghost" size="icon" onClick={onDelete} aria-label={`${t.delete} ${task.title}`}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </div>
-      <Badge>{task.points} pts</Badge>
     </div>
   );
 }
 
-function TaskForm({ onCreate, t }: { onCreate: (t: Omit<Task, "id" | "createdAt" | "done">) => void; t:any }) {
+function TaskFilters({
+  t,
+  projects,
+  projectValue,
+  onProjectChange,
+  priorityValue,
+  onPriorityChange,
+  searchValue,
+  onSearchChange,
+  showCompleted,
+  onToggleCompleted,
+  focusOnly,
+  onToggleFocus,
+  onReset,
+}: {
+  t: any;
+  projects: string[];
+  projectValue: string;
+  onProjectChange: (value: string) => void;
+  priorityValue: string;
+  onPriorityChange: (value: string) => void;
+  searchValue: string;
+  onSearchChange: (value: string) => void;
+  showCompleted: boolean;
+  onToggleCompleted: (value: boolean) => void;
+  focusOnly: boolean;
+  onToggleFocus: (value: boolean) => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:flex-1">
+        <div className="space-y-1">
+          <Label>{t.filters}</Label>
+          <Select value={projectValue} onValueChange={onProjectChange}>
+            <SelectTrigger><SelectValue placeholder={t.project} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t.allProjects}</SelectItem>
+              {projects.map(project => (
+                <SelectItem key={project} value={project}>{project}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label>{t.priority}</Label>
+          <Select value={priorityValue} onValueChange={onPriorityChange}>
+            <SelectTrigger><SelectValue placeholder={t.priority} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t.allPriorities}</SelectItem>
+              <SelectItem value="high">{t.priorityHigh}</SelectItem>
+              <SelectItem value="med">{t.priorityMedium}</SelectItem>
+              <SelectItem value="low">{t.priorityLow}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label>{t.searchPlaceholder}</Label>
+          <Input value={searchValue} onChange={(e)=> onSearchChange(e.target.value)} placeholder={t.searchPlaceholder} />
+        </div>
+        <div className="flex items-center gap-2 rounded-xl border border-dashed p-3 text-xs text-neutral-600 dark:text-neutral-300">
+          <div className="flex items-center gap-2">
+            <Switch checked={showCompleted} onCheckedChange={(v)=> onToggleCompleted(!!v)} />
+            <span>{t.showCompleted}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch checked={focusOnly} onCheckedChange={(v)=> onToggleFocus(!!v)} />
+            <span>{t.showFocusOnly}</span>
+          </div>
+        </div>
+      </div>
+      <Button variant="ghost" className="self-start" onClick={onReset}>
+        <Filter className="mr-2 h-4 w-4" /> {t.clearFilters}
+      </Button>
+    </div>
+  );
+}
+
+function BulkTaskDialog({
+  t,
+  projects,
+  onAddProject,
+  onSubmit,
+}: {
+  t: any;
+  projects: string[];
+  onAddProject: (name: string) => void;
+  onSubmit: (items: Omit<Task, "id" | "createdAt" | "done">[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [raw, setRaw] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  const example = `${projects[0] ?? "General"} | ${t.titleLbl} | 45 | high`;
+
+  function parseLine(line: string) {
+    const parts = line.split("|").map(p => p.trim());
+    if (parts.length < 2) throw new Error(t.titleLbl);
+    const [projectRaw, titleRaw, minutesRaw, priorityRaw, dueRaw] = parts;
+    const project = projectRaw || projects[0] || "General";
+    const title = titleRaw;
+    if (!title) throw new Error(t.titleLbl);
+    const minutes = Math.max(5, parseInt(minutesRaw || "30", 10) || 30);
+    const priorityKey = (priorityRaw || "med").toLowerCase();
+    const priority: Task["priority"] = priorityKey.startsWith("h")
+      ? "high"
+      : priorityKey.startsWith("l")
+      ? "low"
+      : "med";
+    const dueDate = dueRaw ? toISODate(dueRaw) : undefined;
+    onAddProject(project);
+    return {
+      title,
+      project,
+      estimateMin: minutes,
+      points: Math.max(10, Math.round(minutes / 15) * 5),
+      priority,
+      dueDate,
+    } satisfies Omit<Task, "id" | "createdAt" | "done">;
+  }
+
+  function handleImport() {
+    try {
+      const lines = raw.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+      if (!lines.length) {
+        setError(t.bulkHint);
+        return;
+      }
+      const items = lines.map(parseLine);
+      onSubmit(items);
+      setFeedback(t.bulkParsed ? t.bulkParsed(items.length) : `${items.length}`);
+      setError(null);
+      setRaw("");
+      setOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <Dialog open={open} onOpenChange={(state) => { setOpen(state); if (!state) setError(null); }}>
+        <DialogTrigger asChild>
+          <Button variant="outline" className="flex items-center gap-2">
+            <ListPlus className="h-4 w-4" /> {t.bulkTasks}
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-xl rounded-3xl border border-neutral-200/70 bg-white/95 shadow-2xl backdrop-blur-xl dark:border-neutral-800/70 dark:bg-neutral-950/90">
+          <DialogHeader>
+            <DialogTitle>{t.bulkTasks}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-sm text-neutral-600 dark:text-neutral-300">{t.bulkHint}</div>
+            <Textarea rows={6} value={raw} onChange={(e)=>setRaw(e.target.value)} placeholder={`${t.importExample}: ${example}`} />
+            {error && <div className="text-sm text-rose-500">{error}</div>}
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => { setOpen(false); }}>{t.cancel}</Button>
+              <Button onClick={handleImport}>{t.add}</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {feedback && <div className="text-xs text-emerald-600 dark:text-emerald-300">{feedback}</div>}
+    </div>
+  );
+}
+
+function BulkGoalDialog({
+  t,
+  projects,
+  onAddProject,
+  onSubmit,
+}: {
+  t: any;
+  projects: string[];
+  onAddProject: (name: string) => void;
+  onSubmit: (items: Omit<Goal, "id" | "createdAt" | "history">[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [raw, setRaw] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  const example = `${projects[0] ?? "General"} | ${t.titleLbl} | 10 | ${t.unitLabel}`;
+
+  function parseLine(line: string) {
+    const parts = line.split("|").map(p => p.trim());
+    if (parts.length < 3) throw new Error(t.bulkGoalHint);
+    const [projectRaw, titleRaw, unitsRaw, labelRaw, dueRaw] = parts;
+    const project = projectRaw || projects[0] || "General";
+    const title = titleRaw;
+    if (!title) throw new Error(t.titleLbl);
+    const targetUnits = Math.max(1, parseInt(unitsRaw || "1", 10) || 1);
+    const unitLabel = labelRaw || t.unitLabel;
+    const dueDate = dueRaw ? toISODate(dueRaw) : undefined;
+    onAddProject(project);
+    return { title, project, targetUnits, unitLabel, dueDate } satisfies Omit<Goal, "id" | "createdAt" | "history">;
+  }
+
+  function handleImport() {
+    try {
+      const lines = raw.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+      if (!lines.length) {
+        setError(t.bulkGoalHint);
+        return;
+      }
+      const items = lines.map(parseLine);
+      onSubmit(items);
+      setFeedback(t.bulkParsed ? t.bulkParsed(items.length) : `${items.length}`);
+      setError(null);
+      setRaw("");
+      setOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <Dialog open={open} onOpenChange={(state) => { setOpen(state); if (!state) setError(null); }}>
+        <DialogTrigger asChild>
+          <Button variant="outline" className="flex items-center gap-2">
+            <ListPlus className="h-4 w-4" /> {t.bulkGoals}
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-xl rounded-3xl border border-neutral-200/70 bg-white/95 shadow-2xl backdrop-blur-xl dark:border-neutral-800/70 dark:bg-neutral-950/90">
+          <DialogHeader>
+            <DialogTitle>{t.bulkGoals}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-sm text-neutral-600 dark:text-neutral-300">{t.bulkGoalHint}</div>
+            <Textarea rows={5} value={raw} onChange={(e)=>setRaw(e.target.value)} placeholder={`${t.importExample}: ${example}`} />
+            {error && <div className="text-sm text-rose-500">{error}</div>}
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => { setOpen(false); }}>{t.cancel}</Button>
+              <Button onClick={handleImport}>{t.add}</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {feedback && <div className="text-xs text-emerald-600 dark:text-emerald-300">{feedback}</div>}
+    </div>
+  );
+}
+
+function TaskForm({ onCreate, t, projects, onAddProject }: { onCreate: (t: Omit<Task, "id" | "createdAt" | "done">) => void; t:any; projects: string[]; onAddProject: (name: string) => void }) {
   const [title, setTitle] = useState("");
-  const [project, setProject] = useState("Economía");
+  const [project, setProject] = useState(projects[0] ?? "General");
   const [estimateMin, setEstimateMin] = useState(50);
   const [points, setPoints] = useState(20);
   const [dueDate, setDueDate] = useState<string | undefined>();
   const [notes, setNotes] = useState("");
   const [priority, setPriority] = useState<"low"|"med"|"high">("med");
 
+  useEffect(() => {
+    setProject(prev => {
+      if (!projects.length) {
+        return prev || "General";
+      }
+      if (!prev || !projects.some(p => p === prev)) {
+        return projects[0];
+      }
+      return prev;
+    });
+  }, [projects]);
+
+  const projectOptions = useMemo(() => {
+    if (!project || projects.includes(project)) return projects;
+    return [...projects, project];
+  }, [projects, project]);
+
+  const handleProjectChange = (value: string) => {
+    if (value === NEW_PROJECT_VALUE) {
+      const name = prompt(t.newProjectPrompt ?? t.newProject ?? "Nuevo proyecto");
+      const normalized = name?.trim();
+      if (normalized) {
+        onAddProject(normalized);
+        setProject(normalized);
+      }
+      return;
+    }
+    setProject(value);
+  };
+
   function submit() {
     if (!title.trim()) return;
+    onAddProject(project);
     onCreate({ title: title.trim(), project, estimateMin, points, notes: notes.trim() || undefined, dueDate: toISODate(dueDate), priority });
     setTitle(""); setNotes(""); setEstimateMin(50); setPoints(20); setDueDate(undefined); setPriority("med");
   }
@@ -617,15 +3520,13 @@ function TaskForm({ onCreate, t }: { onCreate: (t: Omit<Task, "id" | "createdAt"
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
           <Label>{t.project}</Label>
-          <Select value={project} onValueChange={setProject}>
+          <Select value={project} onValueChange={handleProjectChange}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="Economía">Economía</SelectItem>
-              <SelectItem value="Investigación">Investigación</SelectItem>
-              <SelectItem value="Cursos">Cursos</SelectItem>
-              <SelectItem value="Legado Verde">Legado Verde</SelectItem>
-              <SelectItem value="Scouts">Scouts</SelectItem>
-              <SelectItem value="General">General</SelectItem>
+              {projectOptions.map(opt => (
+                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+              ))}
+              <SelectItem value={NEW_PROJECT_VALUE}>+ {t.newProject ?? "Nuevo proyecto"}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -644,13 +3545,13 @@ function TaskForm({ onCreate, t }: { onCreate: (t: Omit<Task, "id" | "createdAt"
           <Input type="number" min={5} step={5} value={points} onChange={(e) => setPoints(parseInt(e.target.value || '0'))} />
         </div>
         <div className="space-y-1">
-          <Label>Prioridad</Label>
+          <Label>{t.priority}</Label>
           <Select value={priority} onValueChange={(v)=>setPriority(v as any)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="low">Low</SelectItem>
-              <SelectItem value="med">Medium</SelectItem>
-              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="low">{t.priorityLow}</SelectItem>
+              <SelectItem value="med">{t.priorityMedium}</SelectItem>
+              <SelectItem value="high">{t.priorityHigh}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -664,15 +3565,46 @@ function TaskForm({ onCreate, t }: { onCreate: (t: Omit<Task, "id" | "createdAt"
   );
 }
 
-function GoalForm({ onCreate, t }: { onCreate: (g: Omit<Goal, "id" | "createdAt" | "history">) => void; t:any }) {
+function GoalForm({ onCreate, t, projects, onAddProject }: { onCreate: (g: Omit<Goal, "id" | "createdAt" | "history">) => void; t:any; projects: string[]; onAddProject: (name: string) => void }) {
   const [title, setTitle] = useState("");
-  const [project, setProject] = useState("Investigación");
+  const [project, setProject] = useState(projects[0] ?? "General");
   const [targetUnits, setTargetUnits] = useState(100);
   const [unitLabel, setUnitLabel] = useState("páginas");
   const [dueDate, setDueDate] = useState<string | undefined>();
 
+  useEffect(() => {
+    setProject(prev => {
+      if (!projects.length) {
+        return prev || "General";
+      }
+      if (!prev || !projects.some(p => p === prev)) {
+        return projects[0];
+      }
+      return prev;
+    });
+  }, [projects]);
+
+  const projectOptions = useMemo(() => {
+    if (!project || projects.includes(project)) return projects;
+    return [...projects, project];
+  }, [projects, project]);
+
+  const handleProjectChange = (value: string) => {
+    if (value === NEW_PROJECT_VALUE) {
+      const name = prompt(t.newProjectPrompt ?? t.newProject ?? "Nuevo proyecto");
+      const normalized = name?.trim();
+      if (normalized) {
+        onAddProject(normalized);
+        setProject(normalized);
+      }
+      return;
+    }
+    setProject(value);
+  };
+
   function submit() {
     if (!title.trim()) return;
+    onAddProject(project);
     onCreate({ title: title.trim(), project, targetUnits, unitLabel, dueDate: toISODate(dueDate) });
     setTitle(""); setTargetUnits(100); setUnitLabel("páginas"); setDueDate(undefined);
   }
@@ -686,15 +3618,13 @@ function GoalForm({ onCreate, t }: { onCreate: (g: Omit<Goal, "id" | "createdAt"
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
           <Label>{t.project}</Label>
-          <Select value={project} onValueChange={setProject}>
+          <Select value={project} onValueChange={handleProjectChange}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="Investigación">Investigación</SelectItem>
-              <SelectItem value="Economía">Economía</SelectItem>
-              <SelectItem value="Cursos">Cursos</SelectItem>
-              <SelectItem value="Legado Verde">Legado Verde</SelectItem>
-              <SelectItem value="Scouts">Scouts</SelectItem>
-              <SelectItem value="General">General</SelectItem>
+              {projectOptions.map(opt => (
+                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+              ))}
+              <SelectItem value={NEW_PROJECT_VALUE}>+ {t.newProject ?? "Nuevo proyecto"}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -714,7 +3644,322 @@ function GoalForm({ onCreate, t }: { onCreate: (g: Omit<Goal, "id" | "createdAt"
         </div>
       </div>
       <Button className="w-full" onClick={submit}>{t.create}</Button>
+      <div className="pt-2">
+        <BulkGoalDialog
+          t={t}
+          projects={projects}
+          onAddProject={onAddProject}
+          onSubmit={(items) => {
+            items.forEach(onCreate);
+          }}
+        />
+      </div>
     </CardContent>
+  );
+}
+
+function GoalHistoryList({ goal, onRemove, t }: { goal: Goal; onRemove: (index: number) => void; t: any }) {
+  if (!goal.history.length) {
+    return <div className="text-xs text-neutral-500 dark:text-neutral-400">{t.emptyHistory}</div>;
+  }
+  const recent = goal.history.map((entry, idx) => ({ entry, idx })).slice(-5).reverse();
+  return (
+    <div className="space-y-1">
+      {recent.map(({ entry, idx }) => (
+        <div
+          key={`${entry.date}-${idx}`}
+          className="flex items-center justify-between rounded-lg bg-neutral-100/70 px-2 py-1 text-xs dark:bg-neutral-800/60"
+        >
+          <span>{format(new Date(entry.date), 'dd/MM')} · {entry.units} {goal.unitLabel}</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-rose-500 hover:text-rose-600"
+            onClick={() => onRemove(idx)}
+            aria-label={t.removeEntry}
+          >
+            <XCircle className="h-4 w-4" />
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TaskEditDialog({
+  task,
+  open,
+  onClose,
+  onSubmit,
+  projects,
+  onAddProject,
+  t,
+}: {
+  task: Task | null;
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (id: string, patch: Partial<Task>) => void;
+  projects: string[];
+  onAddProject: (name: string) => void;
+  t: any;
+}) {
+  const [title, setTitle] = useState("");
+  const [project, setProject] = useState("General");
+  const [estimateMin, setEstimateMin] = useState(30);
+  const [points, setPoints] = useState(20);
+  const [dueDate, setDueDate] = useState<string>("");
+  const [notes, setNotes] = useState("");
+  const [priority, setPriority] = useState<Task["priority"]>("med");
+
+  useEffect(() => {
+    if (!task) return;
+    setTitle(task.title);
+    setProject(task.project);
+    setEstimateMin(task.estimateMin);
+    setPoints(task.points);
+    setDueDate(task.dueDate ? task.dueDate.slice(0, 10) : "");
+    setNotes(task.notes || "");
+    setPriority(task.priority);
+  }, [task]);
+
+  const projectOptions = useMemo(() => {
+    if (!project || projects.includes(project)) return projects;
+    return [...projects, project];
+  }, [project, projects]);
+
+  const handleProjectChange = (value: string) => {
+    if (value === NEW_PROJECT_VALUE) {
+      const name = prompt(t.newProjectPrompt ?? t.newProject ?? "Nuevo proyecto");
+      const normalized = name?.trim();
+      if (normalized) {
+        onAddProject(normalized);
+        setProject(normalized);
+      }
+      return;
+    }
+    setProject(value);
+  };
+
+  const handleSave = () => {
+    if (!task) return;
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    const safeEstimate = Number.isFinite(estimateMin) ? estimateMin : task.estimateMin;
+    const safePoints = Number.isFinite(points) ? points : task.points;
+    onAddProject(project);
+    onSubmit(task.id, {
+      title: trimmed,
+      project,
+      estimateMin: Math.max(5, safeEstimate),
+      points: Math.max(5, safePoints),
+      priority,
+      dueDate: dueDate ? toISODate(dueDate) : undefined,
+      notes: notes.trim() || undefined,
+    });
+    onClose();
+  };
+
+  if (!task) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={(state) => { if (!state) onClose(); }}>
+      <DialogContent className="max-w-2xl rounded-3xl border border-neutral-200/70 bg-white/95 shadow-2xl backdrop-blur-xl dark:border-neutral-800/70 dark:bg-neutral-950/90">
+        <DialogHeader>
+          <DialogTitle>{t.edit}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label>{t.titleLbl}</Label>
+            <Input value={title} onChange={(e)=>setTitle(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label>{t.project}</Label>
+              <Select value={project} onValueChange={handleProjectChange}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {projectOptions.map(opt => (
+                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                  ))}
+                  <SelectItem value={NEW_PROJECT_VALUE}>+ {t.newProject ?? "Nuevo proyecto"}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>{t.due}</Label>
+              <Input type="date" value={dueDate} onChange={(e)=>setDueDate(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="space-y-1">
+              <Label>{t.estimate}</Label>
+              <Input
+                type="number"
+                value={estimateMin}
+                onChange={(e)=>{
+                  const value = parseInt(e.target.value || '0', 10);
+                  setEstimateMin(Number.isNaN(value) ? 0 : value);
+                }}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>{t.points}</Label>
+              <Input
+                type="number"
+                value={points}
+                onChange={(e)=>{
+                  const value = parseInt(e.target.value || '0', 10);
+                  setPoints(Number.isNaN(value) ? 0 : value);
+                }}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>{t.priority}</Label>
+              <Select value={priority} onValueChange={(value)=> setPriority(value as Task["priority"]) }>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">{t.priorityLow}</SelectItem>
+                  <SelectItem value="med">{t.priorityMedium}</SelectItem>
+                  <SelectItem value="high">{t.priorityHigh}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label>{t.notes}</Label>
+            <Textarea value={notes} onChange={(e)=>setNotes(e.target.value)} />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={onClose}>{t.cancel}</Button>
+            <Button onClick={handleSave}>{t.saveChanges}</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function GoalEditDialog({
+  goal,
+  open,
+  onClose,
+  onSubmit,
+  projects,
+  onAddProject,
+  t,
+}: {
+  goal: Goal | null;
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (id: string, patch: Partial<Goal>) => void;
+  projects: string[];
+  onAddProject: (name: string) => void;
+  t: any;
+}) {
+  const [title, setTitle] = useState("");
+  const [project, setProject] = useState("General");
+  const [targetUnits, setTargetUnits] = useState(1);
+  const [unitLabel, setUnitLabel] = useState("");
+  const [dueDate, setDueDate] = useState<string>("");
+
+  useEffect(() => {
+    if (!goal) return;
+    setTitle(goal.title);
+    setProject(goal.project);
+    setTargetUnits(goal.targetUnits);
+    setUnitLabel(goal.unitLabel);
+    setDueDate(goal.dueDate ? goal.dueDate.slice(0, 10) : "");
+  }, [goal]);
+
+  const projectOptions = useMemo(() => {
+    if (!project || projects.includes(project)) return projects;
+    return [...projects, project];
+  }, [project, projects]);
+
+  const handleProjectChange = (value: string) => {
+    if (value === NEW_PROJECT_VALUE) {
+      const name = prompt(t.newProjectPrompt ?? t.newProject ?? "Nuevo proyecto");
+      const normalized = name?.trim();
+      if (normalized) {
+        onAddProject(normalized);
+        setProject(normalized);
+      }
+      return;
+    }
+    setProject(value);
+  };
+
+  const handleSave = () => {
+    if (!goal) return;
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    const safeUnits = Number.isFinite(targetUnits) ? targetUnits : goal.targetUnits;
+    onAddProject(project);
+    onSubmit(goal.id, {
+      title: trimmed,
+      project,
+      targetUnits: Math.max(1, safeUnits),
+      unitLabel: unitLabel.trim() || goal.unitLabel,
+      dueDate: dueDate ? toISODate(dueDate) : undefined,
+    });
+    onClose();
+  };
+
+  if (!goal) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={(state) => { if (!state) onClose(); }}>
+      <DialogContent className="max-w-2xl rounded-3xl border border-neutral-200/70 bg-white/95 shadow-2xl backdrop-blur-xl dark:border-neutral-800/70 dark:bg-neutral-950/90">
+        <DialogHeader>
+          <DialogTitle>{t.edit}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label>{t.titleLbl}</Label>
+            <Input value={title} onChange={(e)=>setTitle(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label>{t.project}</Label>
+              <Select value={project} onValueChange={handleProjectChange}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {projectOptions.map(opt => (
+                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                  ))}
+                  <SelectItem value={NEW_PROJECT_VALUE}>+ {t.newProject ?? "Nuevo proyecto"}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>{t.goalDate}</Label>
+              <Input type="date" value={dueDate} onChange={(e)=>setDueDate(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label>{t.goalUnits}</Label>
+              <Input
+                type="number"
+                value={targetUnits}
+                onChange={(e)=>{
+                  const value = parseInt(e.target.value || '0', 10);
+                  setTargetUnits(Number.isNaN(value) ? 0 : value);
+                }}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>{t.unitLabel}</Label>
+              <Input value={unitLabel} onChange={(e)=>setUnitLabel(e.target.value)} />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={onClose}>{t.cancel}</Button>
+            <Button onClick={handleSave}>{t.saveChanges}</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -772,14 +4017,14 @@ function GoalMiniChart({ goal, t }: { goal: Goal; t:any }) {
 }
 
 // ===== Semana =====
-function WeekPlan({ tasks, addTask, t }: { tasks: Task[]; addTask: (t: Omit<Task, 'id'|'createdAt'|'done'>)=>void; t:any }){
+function WeekPlan({ tasks, addTask, t, defaultProject }: { tasks: Task[]; addTask: (t: Omit<Task, 'id'|'createdAt'|'done'>)=>void; t:any; defaultProject: string }){
   const days = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   const todayIdx = new Date().getDay(); // 0=Dom
   function addQuick(dayOffset:number){
     const title = prompt(`Tarea (${days[(todayIdx+6+dayOffset)%7]})`);
     if(title){
       const d = new Date(); d.setDate(d.getDate()+dayOffset);
-      addTask({ title, project:'General', estimateMin:30, points:20, dueDate: toISODate(d.toISOString()) });
+      addTask({ title, project: defaultProject, estimateMin:30, points:20, dueDate: toISODate(d.toISOString()) });
     }
   }
   return (
@@ -814,27 +4059,29 @@ function Backlog({ tasks, setTasks, t }: { tasks: Task[]; setTasks: React.Dispat
       <Card>
         <CardHeader className="pb-2"><CardTitle>Criticas</CardTitle></CardHeader>
         <CardContent className="space-y-2">
-          {undone.filter(x=>x.priority==='high').map(x=> <BLRow key={x.id} t={x} bump={bump} />)}
+          {undone.filter(x=>x.priority==='high').map(x=> <BLRow key={x.id} task={x} bump={bump} t={t} />)}
           {undone.filter(x=>x.priority==='high').length===0 && <div className="text-sm text-neutral-500">Vacío</div>}
         </CardContent>
       </Card>
       <Card>
         <CardHeader className="pb-2"><CardTitle>Normales</CardTitle></CardHeader>
         <CardContent className="space-y-2">
-          {undone.filter(x=>x.priority!=='high').map(x=> <BLRow key={x.id} t={x} bump={bump} />)}
+          {undone.filter(x=>x.priority!=='high').map(x=> <BLRow key={x.id} task={x} bump={bump} t={t} />)}
           {undone.filter(x=>x.priority!=='high').length===0 && <div className="text-sm text-neutral-500">Vacío</div>}
         </CardContent>
       </Card>
     </div>
   );
 }
-function BLRow({ t, bump }:{ t:Task; bump:(id:string)=>void }){
+function BLRow({ task, bump, t }:{ task:Task; bump:(id:string)=>void; t:any }){
   return <div className="rounded-xl border p-2 text-sm flex items-center justify-between">
     <div>
-      <div className="font-medium">{t.title}</div>
-      <div className="text-xs text-neutral-500">{t.project} · {t.estimateMin}min</div>
+      <div className="font-medium">{task.title}</div>
+      <div className="text-xs text-neutral-500">{task.project} · {task.estimateMin}min</div>
     </div>
-    <Button variant="secondary" size="sm" onClick={()=>bump(t.id)}>{t.priority==='high'?'Bajar':'Priorizar'}</Button>
+    <Button variant="secondary" size="sm" onClick={()=>bump(task.id)}>
+      {task.priority==='high' ? t.priorityDemote : t.priorityPromote}
+    </Button>
   </div>;
 }
 
@@ -896,7 +4143,7 @@ function FocusTimer({ cfg, setCfg, t }: { cfg: Cfg; setCfg: (c: Cfg)=>void; t:an
   );
 }
 
-function SettingsPane({ cfg, setCfg, exportAll, importAll, t }:{ cfg: Cfg; setCfg:(c:Cfg)=>void; exportAll:()=>void; importAll:(f:File)=>void; t:any }){
+function SettingsPane({ cfg, setCfg, exportAll, importAll, t, projects, onRemoveProject }:{ cfg: Cfg; setCfg:(c:Cfg)=>void; exportAll:()=>void; importAll:(f:File)=>void; t:any; projects: string[]; onRemoveProject: (name: string) => void }){
   const fileRef = useRef<HTMLInputElement|null>(null);
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -917,6 +4164,26 @@ function SettingsPane({ cfg, setCfg, exportAll, importAll, t }:{ cfg: Cfg; setCf
               </SelectContent>
             </Select>
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>{t.aiCapacityLabel}</Label>
+              <Input
+                type="number"
+                value={cfg.dailyCapacityMin}
+                min={30}
+                onChange={(e)=> setCfg({ ...cfg, dailyCapacityMin: Math.max(30, parseInt(e.target.value || '0', 10)) })}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>{t.aiMinSlotsLabel}</Label>
+              <Input
+                type="number"
+                value={cfg.dailyMinSlots}
+                min={1}
+                onChange={(e)=> setCfg({ ...cfg, dailyMinSlots: Math.max(1, parseInt(e.target.value || '0', 10)) })}
+              />
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -929,6 +4196,33 @@ function SettingsPane({ cfg, setCfg, exportAll, importAll, t }:{ cfg: Cfg; setCf
             <Button variant="secondary" onClick={()=> fileRef.current?.click()} className="flex items-center gap-2"><Upload className="h-4 w-4" /> {t.import}</Button>
           </div>
           <div className="text-xs text-neutral-500 flex items-center gap-2"><Keyboard className="h-4 w-4" />Atajos: Alt+N tarea rápida, Alt+D calificar día.</div>
+        </CardContent>
+      </Card>
+
+      <Card className="md:col-span-2">
+        <CardHeader className="pb-2"><CardTitle>{t.manageProjects}</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="text-xs text-neutral-500 dark:text-neutral-400">{t.manageProjectsHint}</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {projects.filter(project => !DEFAULT_PROJECTS.includes(project)).map(project => (
+              <div key={project} className="flex items-center justify-between rounded-xl border px-3 py-2 text-sm">
+                <span>{project}</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onRemoveProject(project)}
+                  aria-label={`${t.removeProject} ${project}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+            {projects.filter(project => !DEFAULT_PROJECTS.includes(project)).length === 0 && (
+              <div className="rounded-xl border border-dashed px-3 py-4 text-sm text-neutral-500 dark:text-neutral-400">
+                {t.noCustomProjects}
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -953,163 +4247,215 @@ function ThemeToggle({ cfg, setCfg, t }:{ cfg: Cfg; setCfg:(c:Cfg)=>void; t:any 
 function Templates({
   addTask,
   addGoal,
+  projects,
+  onAddProject,
+  t,
+  defaultProject,
+  lang,
 }: {
   addTask: (t: Omit<Task, "id" | "createdAt" | "done">) => void;
   addGoal: (g: Omit<Goal, "id" | "createdAt" | "history">) => void;
+  projects: string[];
+  onAddProject: (name: string) => void;
+  t: any;
+  defaultProject: string;
+  lang: "es" | "en";
 }) {
-  // Helpers rápidos
-  const addExamPack = () => {
-    addTask({
-      title: "Repaso temario completo",
-      project: "Economía",
-      estimateMin: 90,
-      points: 40,
-      priority: "high",
+  const isSpanish = lang === "es";
+  const [targetProject, setTargetProject] = useState(defaultProject);
+  const [intensity, setIntensity] = useState<"light" | "balanced" | "turbo">("balanced");
+  const [dueDate, setDueDate] = useState<string>("");
+  const [status, setStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTargetProject(prev => {
+      if (projects.includes(prev)) return prev;
+      return projects[0] ?? "General";
     });
-    addTask({
-      title: "Resolver 3 exámenes pasados",
-      project: "Economía",
-      estimateMin: 120,
-      points: 40,
-      priority: "high",
-    });
-    addTask({
-      title: "Checklist materiales",
-      project: "General",
-      estimateMin: 15,
-      points: 10,
-      priority: "med",
-    });
+  }, [projects]);
+
+  useEffect(() => {
+    if (!projects.includes(targetProject)) {
+      setTargetProject(projects[0] ?? "General");
+    }
+  }, [targetProject, projects]);
+
+  useEffect(() => {
+    setTargetProject(defaultProject);
+  }, [defaultProject]);
+
+  const handleProjectChange = (value: string) => {
+    if (value === NEW_PROJECT_VALUE) {
+      const name = prompt(t.newProjectPrompt ?? t.newProject ?? "Nuevo proyecto");
+      const normalized = name?.trim();
+      if (normalized) {
+        onAddProject(normalized);
+        setTargetProject(normalized);
+      }
+      return;
+    }
+    setTargetProject(value);
   };
 
-  const addResearchPack = () => {
-    addGoal({
-      title: "Borrador sección Métodos",
-      project: "Investigación",
-      targetUnits: 5,
-      unitLabel: "páginas",
-    });
-    addTask({
-      title: "Leer 2 papers clave y anotar ideas",
-      project: "Investigación",
-      estimateMin: 60,
-      points: 30,
-      priority: "med",
-    });
-    addTask({
-      title: "Escribir 2 páginas del borrador",
-      project: "Investigación",
-      estimateMin: 60,
-      points: 30,
-      priority: "high",
-    });
-  };
+  const intensityLabel = intensity === "light" ? t.templateLight : intensity === "turbo" ? t.templateTurbo : t.templateBalanced;
+  const multiplier = intensity === "light" ? 0.75 : intensity === "turbo" ? 1.35 : 1;
+  const resolvedDue = dueDate ? toISODate(dueDate) : undefined;
 
-  const addCoursePack = () => {
-    addGoal({
-      title: "Terminar módulo actual",
-      project: "Cursos",
-      targetUnits: 3,
-      unitLabel: "lecciones",
-    });
-    addTask({
-      title: "Ver 1 lección y tomar notas",
-      project: "Cursos",
-      estimateMin: 45,
-      points: 20,
-      priority: "med",
-    });
-    addTask({
-      title: "Resolver ejercicios del módulo",
-      project: "Cursos",
-      estimateMin: 45,
-      points: 20,
-      priority: "med",
-    });
-  };
+  const packs = useMemo(() => {
+    return [
+      {
+        id: "daily33",
+        title: isSpanish ? "Pack: Día base 3×3" : "Pack: Daily 3×3",
+        description: isSpanish
+          ? "Tres apuestas: foco, avance real y mantenimiento con intención."
+          : "Three bets: focus, meaningful progress, and system maintenance.",
+        tasks: [
+          { title: isSpanish ? "Tarea crítica del día" : "Critical task of the day", project: "__target__", estimateMin: 60, points: 40, priority: "high" as const },
+          { title: isSpanish ? "Avance en meta principal (+1 unidad)" : "Push main goal (+1 unit)", project: "__target__", estimateMin: 40, points: 25, priority: "med" as const },
+          { title: isSpanish ? "Mantenimiento del sistema (archivos/orden)" : "System maintenance (files/order)", project: "General", estimateMin: 20, points: 12, priority: "low" as const },
+        ],
+      },
+      {
+        id: "exam",
+        title: isSpanish ? "Pack: Examen turbo" : "Pack: Exam turbo",
+        description: isSpanish
+          ? "Simula examen, repasa temario y cierra pendientes logísticos."
+          : "Simulate the exam, review syllabus, and close logistics.",
+        tasks: [
+          { title: isSpanish ? "Repaso temario completo" : "Full syllabus review", project: "__target__", estimateMin: 90, points: 45, priority: "high" as const },
+          { title: isSpanish ? "Resolver 3 exámenes pasados" : "Solve 3 past exams", project: "__target__", estimateMin: 120, points: 60, priority: "high" as const },
+          { title: isSpanish ? "Checklist materiales y descanso" : "Material checklist & rest", project: "General", estimateMin: 20, points: 15, priority: "med" as const },
+        ],
+      },
+      {
+        id: "research",
+        title: isSpanish ? "Pack: Investigación" : "Pack: Research sprint",
+        description: isSpanish
+          ? "Lectura con notas y páginas nuevas para tu manuscrito."
+          : "Read with notes and ship new manuscript pages.",
+        goals: [
+          { title: isSpanish ? "Borrador sección Métodos" : "Draft methods section", project: "__target__", targetUnits: 4, unitLabel: isSpanish ? "páginas" : "pages" },
+        ],
+        tasks: [
+          { title: isSpanish ? "Leer 2 papers clave y anotar hallazgos" : "Read 2 key papers and capture insights", project: "__target__", estimateMin: 70, points: 30, priority: "med" as const },
+          { title: isSpanish ? "Escribir 2 páginas nuevas" : "Write 2 fresh pages", project: "__target__", estimateMin: 60, points: 35, priority: "high" as const },
+        ],
+      },
+      {
+        id: "courses",
+        title: isSpanish ? "Pack: Cursos sin backlog" : "Pack: Course momentum",
+        description: isSpanish
+          ? "Asegura avance en el módulo actual y aplica lo aprendido."
+          : "Advance the current module and apply the lesson.",
+        goals: [
+          { title: isSpanish ? "Terminar módulo actual" : "Finish current module", project: "__target__", targetUnits: 3, unitLabel: isSpanish ? "lecciones" : "lessons" },
+        ],
+        tasks: [
+          { title: isSpanish ? "Ver 1 lección y tomar notas" : "Watch 1 lesson and take notes", project: "__target__", estimateMin: 45, points: 20, priority: "med" as const },
+          { title: isSpanish ? "Resolver ejercicios del módulo" : "Complete module exercises", project: "__target__", estimateMin: 45, points: 25, priority: "med" as const },
+          { title: isSpanish ? "Aplicar el concepto en mini proyecto" : "Apply concept in a mini project", project: "__target__", estimateMin: 60, points: 30, priority: "high" as const },
+        ],
+      },
+    ];
+  }, [isSpanish]);
 
-  const addBaseDay33 = () => {
-    // 3 tareas: una high, una med, una low. Tu mínima dignidad diaria.
-    addTask({
-      title: "Tarea crítica del día",
-      project: "General",
-      estimateMin: 60,
-      points: 40,
-      priority: "high",
+  const resolveProject = (value: string) => (value === "__target__" ? targetProject : value);
+
+  const applyPack = (pack: typeof packs[number]) => {
+    onAddProject(targetProject);
+    pack.goals?.forEach(goal => {
+      addGoal({
+        title: goal.title,
+        project: resolveProject(goal.project),
+        targetUnits: goal.targetUnits,
+        unitLabel: goal.unitLabel,
+        dueDate: resolvedDue ?? goal.dueDate,
+      });
     });
-    addTask({
-      title: "Avance en meta principal (+1 unidad)",
-      project: "Investigación",
-      estimateMin: 40,
-      points: 25,
-      priority: "med",
+    pack.tasks?.forEach(task => {
+      const estimate = Math.max(10, Math.round((task.estimateMin * multiplier) / 5) * 5);
+      const points = Math.max(10, Math.round((task.points ?? estimate / 2) / 5) * 5);
+      addTask({
+        title: task.title,
+        project: resolveProject(task.project),
+        estimateMin: estimate,
+        points,
+        priority: task.priority ?? "med",
+        dueDate: resolvedDue,
+        notes: task.notes,
+      });
     });
-    addTask({
-      title: "Mantenimiento del sistema (archivos/orden)",
-      project: "General",
-      estimateMin: 15,
-      points: 10,
-      priority: "low",
-    });
+    setStatus(`${pack.title} · ${t.templateSuccess}`);
+    setTimeout(() => setStatus(null), 3500);
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle>Pack: Día base 3×3</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <p className="text-sm text-neutral-500">
-            Tres tareas: una crítica, una de avance real, una de mantenimiento.
-          </p>
-          <Button className="w-full" onClick={addBaseDay33}>
-            Cargar
-          </Button>
-        </CardContent>
-      </Card>
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:flex-1">
+          <div className="space-y-1">
+            <Label>{t.templateProjectLabel}</Label>
+            <Select value={targetProject} onValueChange={handleProjectChange}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {projects.map(project => (
+                  <SelectItem key={project} value={project}>{project}</SelectItem>
+                ))}
+                <SelectItem value={NEW_PROJECT_VALUE}>+ {t.newProject ?? "Nuevo proyecto"}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>{t.templateIntensity}</Label>
+            <Select value={intensity} onValueChange={(value)=> setIntensity(value as typeof intensity)}>
+              <SelectTrigger><SelectValue placeholder={intensityLabel} /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="light">{t.templateLight}</SelectItem>
+                <SelectItem value="balanced">{t.templateBalanced}</SelectItem>
+                <SelectItem value="turbo">{t.templateTurbo}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>{t.due}</Label>
+            <Input type="date" value={dueDate} onChange={(e)=>setDueDate(e.target.value)} />
+          </div>
+        </div>
+        {status && (
+          <div className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-600 dark:text-emerald-300">
+            <PartyPopper className="h-4 w-4" /> {status}
+          </div>
+        )}
+      </div>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle>Pack: Examen</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <p className="text-sm text-neutral-500">
-            Enfoque total y práctica dura. Sin autoengaño.
-          </p>
-          <Button className="w-full" onClick={addExamPack}>
-            Cargar
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle>Pack: Investigación</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <p className="text-sm text-neutral-500">
-            Lectura con notas y páginas escritas hoy.
-          </p>
-          <Button className="w-full" onClick={addResearchPack}>
-            Cargar
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle>Pack: Cursos</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <p className="text-sm text-neutral-500">
-            Avanza módulos sin acumular “lo veo luego”.
-          </p>
-          <Button className="w-full" onClick={addCoursePack}>
-            Cargar
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {packs.map(pack => (
+          <Card key={pack.id} className="relative overflow-hidden border border-neutral-200/70 shadow-sm transition-all hover:shadow-xl dark:border-neutral-700">
+            <CardHeader className="pb-2">
+              <CardTitle>{pack.title}</CardTitle>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">{pack.description}</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <ul className="space-y-1 text-xs text-neutral-600 dark:text-neutral-300">
+                {pack.tasks?.map((task, idx) => (
+                  <li key={`task-${pack.id}-${idx}`}>{resolveProject(task.project)} · {task.title}</li>
+                ))}
+                {pack.goals?.map((goal, idx) => (
+                  <li key={`goal-${pack.id}-${idx}`} className="font-semibold text-emerald-600 dark:text-emerald-300">
+                    {resolveProject(goal.project)} · {goal.title}
+                  </li>
+                ))}
+              </ul>
+              <div className="text-xs text-neutral-500 dark:text-neutral-400">
+                {intensityLabel} · {resolvedDue ? (isSpanish ? `Fecha ${format(new Date(resolvedDue), 'dd/MM')}` : `Due ${format(new Date(resolvedDue), 'MM/dd')}`) : isSpanish ? "Sin fecha fija" : "No due date"}
+              </div>
+              <Button className="w-full" onClick={() => applyPack(pack)}>
+                {isSpanish ? "Aplicar" : "Apply"}
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }
