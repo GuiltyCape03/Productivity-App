@@ -1,0 +1,4 @@
+Summary of updates:
+- Reemplazamos el componente monolítico por un dashboard modular con proveedores de estado y paneles por dominio.
+- Añadimos un motor de IA reutilizable y un chatbot consciente de proyectos que genera planes diarios y responde dudas.
+- Renovamos la interfaz con tarjetas configurables, workspace tipo Notion, conexión simulada a Google Calendar y panel de preferencias.
