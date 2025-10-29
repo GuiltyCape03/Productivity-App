@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useDashboard } from "@/modules/dashboard/DashboardProvider";
+import { useSyncPreferences } from "@/modules/dashboard/useSyncPreferences";
 
 interface PageViewProps {
   id: string;
@@ -12,6 +13,7 @@ interface PageViewProps {
 
 export function PageView({ id }: PageViewProps) {
   const { pages, projects } = useDashboard();
+  useSyncPreferences();
   const page = useMemo(() => pages.find((item) => item.id === id) ?? null, [pages, id]);
 
   if (!page) {

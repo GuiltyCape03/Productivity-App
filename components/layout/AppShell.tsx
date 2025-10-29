@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useDashboard } from "@/modules/dashboard/DashboardProvider";
 import { cn } from "@/styles/utils";
 import { Badge } from "@/components/ui/badge";
+import { useSyncPreferences } from "@/modules/dashboard/useSyncPreferences";
 
 interface AppShellProps {
   tasks: React.ReactNode;
@@ -15,14 +16,8 @@ interface AppShellProps {
 }
 
 export function AppShell({ tasks, goals, workspace, calendar, ai, preferences }: AppShellProps) {
-  const { preferences: prefs, snapshot } = useDashboard();
-
-  useEffect(() => {
-    if (typeof document !== "undefined") {
-      document.documentElement.dataset.theme = prefs.theme;
-      document.body.dataset.density = prefs.density;
-    }
-  }, [prefs.theme, prefs.density]);
+  const { snapshot } = useDashboard();
+  const prefs = useSyncPreferences();
 
   const accentClass = useMemo(() => {
     switch (prefs.accent) {

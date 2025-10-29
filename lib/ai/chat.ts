@@ -9,6 +9,7 @@ export interface MemoryTurn {
 
 const MEMORY_PREFIX = "neuraldesk.ai.memory.";
 const LAST_PREFIX = "neuraldesk.ai.last.";
+const CHAT_HISTORY_PREFIX = "nd.chat.v1.";
 
 function normaliseProjectKey(projectId: string | null | undefined) {
   return projectId ?? "inbox";
@@ -59,6 +60,42 @@ function persistLastHash(projectId: string, hash: string) {
   if (typeof window === "undefined") return;
   const today = new Date().toISOString().slice(0, 10);
   window.localStorage.setItem(`${LAST_PREFIX}${projectId}.${today}`, hash);
+}
+
+export interface ChatHistoryTurn {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+}
+
+function loadChat(projectId: string) {
+  if (typeof window === "undefined") return [] as ChatHistoryTurn[];
+  try {
+    const raw = window.localStorage.getItem(`${CHAT_HISTORY_PREFIX}${projectId}`);
+    if (!raw) return [] as ChatHistoryTurn[];
+    const parsed = JSON.parse(raw) as ChatHistoryTurn[];
+    return Array.isArray(parsed) ? parsed.slice(-50) : [];
+  } catch (error) {
+    console.warn("No se pudo leer el historial del chat", error);
+    return [] as ChatHistoryTurn[];
+  }
+}
+
+function persistChat(projectId: string, turns: ChatHistoryTurn[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(`${CHAT_HISTORY_PREFIX}${projectId}`, JSON.stringify(turns.slice(-50)));
+  } catch (error) {
+    console.warn("No se pudo guardar el historial del chat", error);
+  }
+}
+
+export function loadChatHistory(projectId: string | null | undefined) {
+  return loadChat(normaliseProjectKey(projectId));
+}
+
+export function persistChatHistory(projectId: string | null | undefined, turns: ChatHistoryTurn[]) {
+  persistChat(normaliseProjectKey(projectId), turns);
 }
 
 function pickOpener(sentiment: "steady" | "overloaded" | "stretch", index: number) {

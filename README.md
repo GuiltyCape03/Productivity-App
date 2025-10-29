@@ -6,9 +6,11 @@ NeuralDesk es un panel de productividad construido con Next.js 14 y Tailwind que
 
 - **Panel modular**: tareas, metas, workspace, calendario y copiloto IA viven en módulos independientes dentro de `modules/` para favorecer el mantenimiento.
 - **IA integrada**: el motor en `lib/ai/` analiza tareas y metas para generar un snapshot de foco, estimar la carga diaria y alimentar un chatbot que entiende tus proyectos.
+- **Chat en streaming**: la ruta `/chat` consume el endpoint server-side `/api/chat` con la Responses API de OpenAI para entregar respuestas en vivo, memoria corta por proyecto y botón de borrado de historial.
 - **Workspace tipo Notion**: crea páginas personalizadas con bloques de texto, checklist, callouts, divisores y encabezados.
 - **Google Calendar opcional**: conecta tu cuenta (mock) para sincronizar eventos y ver tu agenda en contexto.
 - **Personalización visual**: ajusta tema, densidad, sombras, tonos de tarjetas y acento de color desde el panel de preferencias.
+- **Pestañas dinámicas**: la barra superior permite crear, renombrar, reordenar y cerrar pestañas que apuntan a rutas como Dashboard, Tasks, Goals, Workspace, Calendar, Coach y Chat. Se sincronizan en `localStorage` bajo la clave `nd.tabs.v1`.
 
 ## Diseño y temas
 
@@ -51,3 +53,17 @@ npm run lint    # ejecutar ESLint
 ```
 
 > **Nota:** los eventos de Google Calendar están simulados localmente hasta que configures credenciales reales. Ajusta `lib/google/calendar.ts` con tu propia implementación cuando dispongas de claves OAuth.
+
+## Configuración de OpenAI y pestañas
+
+1. Crea un archivo `.env.local` en la raíz con tu clave de OpenAI:
+
+   ```bash
+   OPENAI_API_KEY=sk-...
+   # opcionalmente puedes sobrescribir el modelo
+   # OPENAI_MODEL=gpt-5
+   ```
+
+2. Instala dependencias (`npm install`) y ejecuta `npm run dev`.
+3. Abre `/chat` para probar el flujo de streaming. El historial se guarda por proyecto en `localStorage` con la clave `nd.chat.v1.<projectId>`.
+4. Usa el botón `+` de la barra de pestañas para abrir vistas adicionales o enfocar una página de workspace.

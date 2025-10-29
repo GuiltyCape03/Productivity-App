@@ -2,14 +2,10 @@ import type { Metadata } from "next";
 import { Inter, Noto_Color_Emoji } from "next/font/google";
 import { cn } from "@/styles/utils";
 import "./globals.css";
+import { TabBar } from "@/components/layout/TabBar";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
-// Noto Color Emoji only has weight 400
-const emoji = Noto_Color_Emoji({ 
-  subsets: ["emoji"],
-  variable: "--font-emoji",
-  weight: "400"  // Required even though it's the only option
-});
+const emoji = Noto_Color_Emoji({ subsets: ["emoji"], variable: "--font-emoji" });
 
 export const metadata: Metadata = {
   title: "NeuralDesk",
@@ -27,7 +23,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         )}
       >
         <div className="min-h-screen bg-radial-hero">
-          {children}
+          <TabBar />
+          <div className="pt-6 md:pt-8">{children}</div>
         </div>
       </body>
     </html>

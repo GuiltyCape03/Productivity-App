@@ -3,3 +3,4 @@ Summary of updates:
 - Añadimos un motor de IA reutilizable y un chatbot consciente de proyectos que genera planes diarios y responde dudas.
 - Renovamos la interfaz con tarjetas configurables, workspace tipo Notion, conexión simulada a Google Calendar y panel de preferencias.
 - Ajustamos el sistema tipográfico, contrastes claro/oscuro, persistencia por proyecto y la memoria del copiloto IA para evitar respuestas repetidas.
+- Integramos la Responses API de OpenAI con streaming SSE, un chat dedicado en `/chat`, y una barra de pestañas dinámica que persiste rutas y proyectos activos.

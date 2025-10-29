@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import { STRINGS } from "@/i18n/strings";
 import { useDashboard } from "@/modules/dashboard/DashboardProvider";
 import type { WorkspacePage } from "@/modules/dashboard/types";
 import { PageList } from "./PageList";
+import { useTabsStore } from "@/stores/tabsStore";
 
 const BLOCK_TYPES = [
   { value: "heading" as const, label: "Encabezado" },
@@ -82,6 +84,13 @@ function cloneBlocks(blocks: DraftBlock[]): DraftBlock[] {
 
 export function WorkspacePanel() {
   const { pages, upsertPage, deletePage, projects } = useDashboard();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { addTab, setActiveTab, tabs } = useTabsStore((state) => ({
+    addTab: state.add,
+    setActiveTab: state.setActive,
+    tabs: state.tabs
+  }));
   const strings = STRINGS.es.workspace;
   const [activePageId, setActivePageId] = useState<string | null>(null);
   const [isCreateOpen, setCreateOpen] = useState(false);
@@ -109,6 +118,13 @@ export function WorkspacePanel() {
       setActivePageId(orderedPages[0].id);
     }
   }, [orderedPages, activePageId]);
+
+  useEffect(() => {
+    if (searchParams?.get("newPage") === "1") {
+      setCreateOpen(true);
+      router.replace("/workspace");
+    }
+  }, [router, searchParams]);
 
   const activePage = orderedPages.find((page) => page.id === activePageId) ?? null;
 
@@ -179,7 +195,25 @@ export function WorkspacePanel() {
   };
 
   const handleOpenNewTab = (id: string) => {
-    window.open(`/workspace/${id}`, "_blank", "noopener");
+    const page = pages.find((item) => item.id === id);
+    if (!page) return;
+    const route = `/workspace/${id}`;
+    const existing = tabs.find((tab) => tab.route === route);
+    if (existing) {
+      setActiveTab(existing.id);
+      router.push(existing.route);
+      return;
+    }
+    const tabId = `workspace-${id}`;
+    addTab({
+      id: tabId,
+      title: page.title,
+      icon: page.icon,
+      route,
+      project: page.projectId ?? undefined
+    });
+    setActiveTab(tabId);
+    router.push(route);
   };
 
   const updateDraft = (updater: (prev: WorkspacePage) => WorkspacePage) => {

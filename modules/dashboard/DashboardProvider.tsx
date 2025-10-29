@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState } from "react";
 import { buildSnapshot } from "@/lib/ai/snapshot";
+import { useTabsStore } from "@/stores/tabsStore";
 import type {
   CalendarEvent,
   DashboardPreferences,
@@ -151,6 +152,7 @@ const DashboardContext = createContext<DashboardContextValue | null>(null);
 export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [hydrated, setHydrated] = useState(false);
+  const updateTabProject = useTabsStore((state) => state.updateProjectForActive);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -215,6 +217,10 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       window.localStorage.removeItem(ACTIVE_PROJECT_KEY);
     }
   }, [state.activeProjectId, hydrated]);
+
+  useEffect(() => {
+    updateTabProject(state.activeProjectId ?? null);
+  }, [state.activeProjectId, updateTabProject]);
 
   const setState = useCallback((updater: (prev: DashboardState) => DashboardState) => {
     dispatch({ type: "set", payload: updater });
