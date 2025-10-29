@@ -4459,6 +4459,36 @@ function GoalForm({ onCreate, t, projects, onAddProject, fallbackProject }: { on
     setProject(value);
   };
 
+  useEffect(() => {
+    setProject(prev => {
+      if (!projects.length) {
+        return prev || "General";
+      }
+      if (!prev || !projects.some(p => p === prev)) {
+        return projects[0];
+      }
+      return prev;
+    });
+  }, [projects]);
+
+  const projectOptions = useMemo(() => {
+    if (!project || projects.includes(project)) return projects;
+    return [...projects, project];
+  }, [projects, project]);
+
+  const handleProjectChange = (value: string) => {
+    if (value === NEW_PROJECT_VALUE) {
+      const name = prompt(t.newProjectPrompt ?? t.newProject ?? "Nuevo proyecto");
+      const normalized = name?.trim();
+      if (normalized) {
+        onAddProject(normalized);
+        setProject(normalized);
+      }
+      return;
+    }
+    setProject(value);
+  };
+
   function submit() {
     if (!title.trim()) return;
     onAddProject(project);
