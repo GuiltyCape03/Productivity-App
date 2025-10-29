@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,12 +53,24 @@ type DailyReview = {
   notes?: string;
 };
 
+const DEFAULT_PROJECTS = [
+  "Economía",
+  "Investigación",
+  "Cursos",
+  "Legado Verde",
+  "Scouts",
+  "General",
+];
+
+const NEW_PROJECT_VALUE = "__new_project__";
+
 // ============== Helpers Persistencia ==============
 const LS_KEYS = {
   goals: "nahum_cls_goals",
   tasks: "nahum_cls_tasks",
   reviews: "nahum_cls_reviews",
   cfg: "nahum_cls_cfg",
+  projects: "nahum_cls_projects",
 };
 
 type Cfg = {
@@ -133,6 +145,8 @@ const strings = {
     history: "Histórico",
     due: "Vence",
     project: "Proyecto",
+    newProject: "Nuevo proyecto",
+    newProjectPrompt: "¿Cómo se llama el nuevo proyecto?",
     estimate: "Estimado (min)",
     points: "Puntos",
     notes: "Notas",
@@ -185,6 +199,8 @@ const strings = {
     history: "History",
     due: "Due",
     project: "Project",
+    newProject: "New project",
+    newProjectPrompt: "Name of the new project",
     estimate: "Estimate (min)",
     points: "Points",
     notes: "Notes",
@@ -222,12 +238,41 @@ export default function Dashboard() {
   const [tasks, setTasks] = useState<Task[]>(() => loadLS<Task[]>(LS_KEYS.tasks, []));
   const [reviews, setReviews] = useState<DailyReview[]>(() => loadLS<DailyReview[]>(LS_KEYS.reviews, []));
   const [cfg, setCfg] = useState<Cfg>(() => loadLS<Cfg>(LS_KEYS.cfg, { theme: "light", lang: "es", focusBlockMin: 25, breakMin: 5, sound: true, notifications: false }));
+  const [projects, setProjects] = useState<string[]>(() => loadLS<string[]>(LS_KEYS.projects, DEFAULT_PROJECTS));
 
   // Persistencia automática
   useEffect(() => saveLS(LS_KEYS.goals, goals), [goals]);
   useEffect(() => saveLS(LS_KEYS.tasks, tasks), [tasks]);
   useEffect(() => saveLS(LS_KEYS.reviews, reviews), [reviews]);
   useEffect(() => saveLS(LS_KEYS.cfg, cfg), [cfg]);
+  useEffect(() => saveLS(LS_KEYS.projects, projects), [projects]);
+
+  const registerProject = useCallback((name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const normalized = trimmed.toLocaleLowerCase();
+    setProjects(prev => {
+      if (prev.some(p => p.toLocaleLowerCase() === normalized)) {
+        return prev;
+      }
+      const set = new Set<string>([...DEFAULT_PROJECTS, ...prev, trimmed]);
+      const next = Array.from(set).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    setProjects(prev => {
+      const set = new Set<string>([...DEFAULT_PROJECTS, ...prev]);
+      goals.forEach(g => set.add(g.project));
+      tasks.forEach(t => set.add(t.project));
+      const next = Array.from(set).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+      if (next.length === prev.length && next.every((value, index) => value === prev[index])) {
+        return prev;
+      }
+      return next;
+    });
+  }, [goals, tasks]);
 
   // Tema
   useEffect(() => {
@@ -241,6 +286,7 @@ export default function Dashboard() {
     const today = todayISO().slice(0,10);
     return tasks.filter(t => t.done && t.createdAt.slice(0,10) === today);
   }, [tasks]);
+  const defaultProject = projects[0] ?? "General";
 
   const weeklyScores = useMemo(() => {
     const now = new Date(todayISO());
@@ -275,6 +321,7 @@ export default function Dashboard() {
 
   // ====== Acciones ======
   function addGoal(g: Omit<Goal, "id" | "createdAt" | "history">) {
+    registerProject(g.project);
     setGoals(prev => [...prev, { id: uuidv4(), createdAt: todayISO(), history: [], ...g }]);
   }
 
@@ -283,6 +330,7 @@ export default function Dashboard() {
   }
 
   function addTask(t: Omit<Task, "id" | "createdAt" | "done">) {
+    registerProject(t.project);
     setTasks(prev => [{ id: uuidv4(), createdAt: todayISO(), done: false, priority: "med", ...t }, ...prev]);
   }
 
@@ -436,7 +484,7 @@ export default function Dashboard() {
               <Card className="md:col-span-2">
                 <CardHeader className="pb-2"><CardTitle>{t.pending}</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
-                  <QuickAdd onAdd={(title) => addTask({ title, project: 'General', estimateMin: 30, points: 20 })} label={t.quickAdd} />
+                  <QuickAdd onAdd={(title) => addTask({ title, project: defaultProject, estimateMin: 30, points: 20 })} label={t.quickAdd} />
                   {pendingTasks.length === 0 && (
                     <div className="text-sm text-neutral-500">{t.emptyTasks}</div>
                   )}
@@ -448,7 +496,7 @@ export default function Dashboard() {
 
               <Card>
                 <CardHeader className="pb-2"><CardTitle>{t.newTask}</CardTitle></CardHeader>
-                <TaskForm onCreate={addTask} t={t} />
+                <TaskForm onCreate={addTask} t={t} projects={projects} onAddProject={registerProject} />
               </Card>
             </div>
           </TabsContent>
@@ -492,14 +540,14 @@ export default function Dashboard() {
 
               <Card>
                 <CardHeader className="pb-2"><CardTitle>{t.newGoal}</CardTitle></CardHeader>
-                <GoalForm onCreate={addGoal} t={t} />
+                <GoalForm onCreate={addGoal} t={t} projects={projects} onAddProject={registerProject} />
               </Card>
             </div>
           </TabsContent>
 
           {/* ====== SEMANA ====== */}
           <TabsContent value="week" className="mt-4">
-            <WeekPlan tasks={tasks} addTask={addTask} t={t} />
+            <WeekPlan tasks={tasks} addTask={addTask} t={t} defaultProject={defaultProject} />
           </TabsContent>
 
           {/* ====== BACKLOG ====== */}
@@ -593,17 +641,48 @@ function TaskRow({ task, toggle }: { task: Task; toggle: (id: string)=>void }) {
   );
 }
 
-function TaskForm({ onCreate, t }: { onCreate: (t: Omit<Task, "id" | "createdAt" | "done">) => void; t:any }) {
+function TaskForm({ onCreate, t, projects, onAddProject }: { onCreate: (t: Omit<Task, "id" | "createdAt" | "done">) => void; t:any; projects: string[]; onAddProject: (name: string) => void }) {
   const [title, setTitle] = useState("");
-  const [project, setProject] = useState("Economía");
+  const [project, setProject] = useState(projects[0] ?? "General");
   const [estimateMin, setEstimateMin] = useState(50);
   const [points, setPoints] = useState(20);
   const [dueDate, setDueDate] = useState<string | undefined>();
   const [notes, setNotes] = useState("");
   const [priority, setPriority] = useState<"low"|"med"|"high">("med");
 
+  useEffect(() => {
+    setProject(prev => {
+      if (!projects.length) {
+        return prev || "General";
+      }
+      if (!prev || !projects.some(p => p === prev)) {
+        return projects[0];
+      }
+      return prev;
+    });
+  }, [projects]);
+
+  const projectOptions = useMemo(() => {
+    if (!project || projects.includes(project)) return projects;
+    return [...projects, project];
+  }, [projects, project]);
+
+  const handleProjectChange = (value: string) => {
+    if (value === NEW_PROJECT_VALUE) {
+      const name = prompt(t.newProjectPrompt ?? t.newProject ?? "Nuevo proyecto");
+      const normalized = name?.trim();
+      if (normalized) {
+        onAddProject(normalized);
+        setProject(normalized);
+      }
+      return;
+    }
+    setProject(value);
+  };
+
   function submit() {
     if (!title.trim()) return;
+    onAddProject(project);
     onCreate({ title: title.trim(), project, estimateMin, points, notes: notes.trim() || undefined, dueDate: toISODate(dueDate), priority });
     setTitle(""); setNotes(""); setEstimateMin(50); setPoints(20); setDueDate(undefined); setPriority("med");
   }
@@ -617,15 +696,13 @@ function TaskForm({ onCreate, t }: { onCreate: (t: Omit<Task, "id" | "createdAt"
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
           <Label>{t.project}</Label>
-          <Select value={project} onValueChange={setProject}>
+          <Select value={project} onValueChange={handleProjectChange}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="Economía">Economía</SelectItem>
-              <SelectItem value="Investigación">Investigación</SelectItem>
-              <SelectItem value="Cursos">Cursos</SelectItem>
-              <SelectItem value="Legado Verde">Legado Verde</SelectItem>
-              <SelectItem value="Scouts">Scouts</SelectItem>
-              <SelectItem value="General">General</SelectItem>
+              {projectOptions.map(opt => (
+                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+              ))}
+              <SelectItem value={NEW_PROJECT_VALUE}>+ {t.newProject ?? "Nuevo proyecto"}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -664,15 +741,46 @@ function TaskForm({ onCreate, t }: { onCreate: (t: Omit<Task, "id" | "createdAt"
   );
 }
 
-function GoalForm({ onCreate, t }: { onCreate: (g: Omit<Goal, "id" | "createdAt" | "history">) => void; t:any }) {
+function GoalForm({ onCreate, t, projects, onAddProject }: { onCreate: (g: Omit<Goal, "id" | "createdAt" | "history">) => void; t:any; projects: string[]; onAddProject: (name: string) => void }) {
   const [title, setTitle] = useState("");
-  const [project, setProject] = useState("Investigación");
+  const [project, setProject] = useState(projects[0] ?? "General");
   const [targetUnits, setTargetUnits] = useState(100);
   const [unitLabel, setUnitLabel] = useState("páginas");
   const [dueDate, setDueDate] = useState<string | undefined>();
 
+  useEffect(() => {
+    setProject(prev => {
+      if (!projects.length) {
+        return prev || "General";
+      }
+      if (!prev || !projects.some(p => p === prev)) {
+        return projects[0];
+      }
+      return prev;
+    });
+  }, [projects]);
+
+  const projectOptions = useMemo(() => {
+    if (!project || projects.includes(project)) return projects;
+    return [...projects, project];
+  }, [projects, project]);
+
+  const handleProjectChange = (value: string) => {
+    if (value === NEW_PROJECT_VALUE) {
+      const name = prompt(t.newProjectPrompt ?? t.newProject ?? "Nuevo proyecto");
+      const normalized = name?.trim();
+      if (normalized) {
+        onAddProject(normalized);
+        setProject(normalized);
+      }
+      return;
+    }
+    setProject(value);
+  };
+
   function submit() {
     if (!title.trim()) return;
+    onAddProject(project);
     onCreate({ title: title.trim(), project, targetUnits, unitLabel, dueDate: toISODate(dueDate) });
     setTitle(""); setTargetUnits(100); setUnitLabel("páginas"); setDueDate(undefined);
   }
@@ -686,15 +794,13 @@ function GoalForm({ onCreate, t }: { onCreate: (g: Omit<Goal, "id" | "createdAt"
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
           <Label>{t.project}</Label>
-          <Select value={project} onValueChange={setProject}>
+          <Select value={project} onValueChange={handleProjectChange}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="Investigación">Investigación</SelectItem>
-              <SelectItem value="Economía">Economía</SelectItem>
-              <SelectItem value="Cursos">Cursos</SelectItem>
-              <SelectItem value="Legado Verde">Legado Verde</SelectItem>
-              <SelectItem value="Scouts">Scouts</SelectItem>
-              <SelectItem value="General">General</SelectItem>
+              {projectOptions.map(opt => (
+                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+              ))}
+              <SelectItem value={NEW_PROJECT_VALUE}>+ {t.newProject ?? "Nuevo proyecto"}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -772,14 +878,14 @@ function GoalMiniChart({ goal, t }: { goal: Goal; t:any }) {
 }
 
 // ===== Semana =====
-function WeekPlan({ tasks, addTask, t }: { tasks: Task[]; addTask: (t: Omit<Task, 'id'|'createdAt'|'done'>)=>void; t:any }){
+function WeekPlan({ tasks, addTask, t, defaultProject }: { tasks: Task[]; addTask: (t: Omit<Task, 'id'|'createdAt'|'done'>)=>void; t:any; defaultProject: string }){
   const days = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   const todayIdx = new Date().getDay(); // 0=Dom
   function addQuick(dayOffset:number){
     const title = prompt(`Tarea (${days[(todayIdx+6+dayOffset)%7]})`);
     if(title){
       const d = new Date(); d.setDate(d.getDate()+dayOffset);
-      addTask({ title, project:'General', estimateMin:30, points:20, dueDate: toISODate(d.toISOString()) });
+      addTask({ title, project: defaultProject, estimateMin:30, points:20, dueDate: toISODate(d.toISOString()) });
     }
   }
   return (
