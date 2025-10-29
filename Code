@@ -36,6 +36,15 @@ import {
   Filter,
   PartyPopper,
   XCircle,
+  CalendarDays,
+  Palette,
+  Star,
+  RefreshCw,
+  Plus,
+  LayoutDashboard,
+  BookOpen,
+  Minus,
+  Link2,
 } from "lucide-react";
 
 // ============== Tipos ==============
@@ -120,6 +129,61 @@ type DailyReview = {
   notes?: string;
 };
 
+type WorkspaceBlock = {
+  id: string;
+  type: "heading" | "todo" | "text" | "divider";
+  text: string;
+  checked?: boolean;
+  accent?: string;
+};
+
+type WorkspacePage = {
+  id: string;
+  icon: string;
+  title: string;
+  description?: string;
+  color: string;
+  createdAt: string;
+  updatedAt: string;
+  tags: string[];
+  favorite?: boolean;
+  blocks: WorkspaceBlock[];
+};
+
+type WorkspaceTemplateKey = "blank" | "daily" | "project" | "knowledge";
+
+type GoogleCalendarConfig = {
+  apiKey: string;
+  clientId: string;
+  calendarId: string;
+  timeZone: string;
+  lookAheadDays: number;
+};
+
+type GoogleCalendarProfile = {
+  name?: string;
+  email?: string;
+  avatar?: string;
+};
+
+type GoogleCalendarEvent = {
+  id: string;
+  summary: string;
+  start: string;
+  end: string;
+  location?: string;
+  hangoutLink?: string;
+  description?: string;
+};
+
+type GoogleCalendarState = {
+  status: "idle" | "loading" | "connected" | "error";
+  message?: string;
+  events: GoogleCalendarEvent[];
+  profile?: GoogleCalendarProfile;
+  lastSyncedAt?: string;
+};
+
 const DEFAULT_PROJECTS = [
   "Economía",
   "Investigación",
@@ -139,6 +203,10 @@ const LS_KEYS = {
   cfg: "nahum_cls_cfg",
   projects: "nahum_cls_projects",
   focus: "nahum_cls_focus",
+  workspace: "nahum_cls_workspace_pages",
+  workspaceActive: "nahum_cls_workspace_active",
+  gcalCfg: "nahum_cls_google_calendar_cfg",
+  gcalState: "nahum_cls_google_calendar_state",
 };
 
 type Cfg = {
@@ -161,6 +229,94 @@ const DEFAULT_CFG: Cfg = {
   notifications: false,
   dailyCapacityMin: 240,
   dailyMinSlots: 3,
+};
+
+const WORKSPACE_COLORS = [
+  "emerald",
+  "sky",
+  "violet",
+  "amber",
+  "rose",
+  "slate",
+] as const;
+
+const WORKSPACE_COLOR_STYLES: Record<string, { bg: string; ring: string; text: string; pill: string }> = {
+  emerald: {
+    bg: "from-emerald-500/15 via-emerald-500/5 to-transparent",
+    ring: "ring-emerald-400/60",
+    text: "text-emerald-900 dark:text-emerald-100",
+    pill: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+  },
+  sky: {
+    bg: "from-sky-500/15 via-sky-500/5 to-transparent",
+    ring: "ring-sky-400/60",
+    text: "text-sky-900 dark:text-sky-100",
+    pill: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
+  },
+  violet: {
+    bg: "from-violet-500/15 via-violet-500/5 to-transparent",
+    ring: "ring-violet-400/60",
+    text: "text-violet-900 dark:text-violet-100",
+    pill: "bg-violet-500/15 text-violet-700 dark:text-violet-200",
+  },
+  amber: {
+    bg: "from-amber-500/20 via-amber-500/10 to-transparent",
+    ring: "ring-amber-400/60",
+    text: "text-amber-900 dark:text-amber-100",
+    pill: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+  },
+  rose: {
+    bg: "from-rose-500/15 via-rose-500/5 to-transparent",
+    ring: "ring-rose-400/60",
+    text: "text-rose-900 dark:text-rose-100",
+    pill: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
+  },
+  slate: {
+    bg: "from-slate-500/15 via-slate-500/5 to-transparent",
+    ring: "ring-slate-400/60",
+    text: "text-slate-900 dark:text-slate-100",
+    pill: "bg-slate-500/10 text-slate-700 dark:text-slate-200",
+  },
+  default: {
+    bg: "from-neutral-500/10 via-neutral-500/5 to-transparent",
+    ring: "ring-neutral-400/50",
+    text: "text-neutral-900 dark:text-neutral-100",
+    pill: "bg-neutral-500/10 text-neutral-700 dark:text-neutral-200",
+  },
+};
+
+function createDefaultWorkspacePages(): WorkspacePage[] {
+  const today = todayISO();
+  return [
+    {
+      id: uuidv4(),
+      icon: "🚀",
+      title: "Panel maestro",
+      description: "Tu centro de mando con quick wins, bloques de foco y vínculos clave.",
+      color: "emerald",
+      createdAt: today,
+      updatedAt: today,
+      tags: ["inicio", "daily"],
+      favorite: true,
+      blocks: [
+        { id: uuidv4(), type: "heading", text: "Ritual de arranque", accent: "emerald" },
+        { id: uuidv4(), type: "todo", text: "Revisa el plan de IA y el calendario", checked: false },
+        { id: uuidv4(), type: "todo", text: "Escoge el bloque más importante del día", checked: false },
+        { id: uuidv4(), type: "todo", text: "Define cómo se ve el día ganado", checked: false },
+        { id: uuidv4(), type: "divider", text: "" },
+        { id: uuidv4(), type: "heading", text: "Notas rápidas", accent: "sky" },
+        { id: uuidv4(), type: "text", text: "Escribe descubrimientos, recordatorios o ideas que quieras revisar al cierre." },
+      ],
+    },
+  ];
+}
+
+const DEFAULT_GCAL_CFG: GoogleCalendarConfig = {
+  apiKey: "",
+  clientId: "",
+  calendarId: "primary",
+  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Mexico_City",
+  lookAheadDays: 7,
 };
 
 function loadLS<T>(key: string, fallback: T): T {
@@ -587,6 +743,111 @@ const strings = {
     bulkParsed: (count: number) => `${count} elementos añadidos.`,
     priorityPromote: "Priorizar",
     priorityDemote: "Bajar prioridad",
+    workspace: "Workspace",
+    workspacePages: "Páginas inteligentes",
+    workspaceSidebarHint: "Diseña vistas al estilo Notion para aterrizar tus objetivos diarios o proyectos.",
+    workspaceNewPage: "Nueva página",
+    workspaceTemplates: "Plantillas rápidas",
+    workspaceTemplateDailyName: "Agenda diaria",
+    workspaceTemplateProjectName: "Proyecto",
+    workspaceTemplateKnowledgeName: "Laboratorio",
+    workspaceTemplateBlankName: "Página en blanco",
+    workspaceTemplateBlankTitle: "Página en blanco",
+    workspaceTemplateBlankDescription: "Comienza desde cero con un lienzo limpio.",
+    workspaceTemplateDailyTitle: "Agenda de ejecución diaria",
+    workspaceTemplateDailyDescription: "Alinea foco, checklist de mínimos y reflexiones del día.",
+    workspaceTemplateProjectTitle: "Tablero de proyecto",
+    workspaceTemplateProjectDescription: "Visualiza el norte, hitos y recursos clave de un proyecto.",
+    workspaceTemplateKnowledgeTitle: "Laboratorio de ideas",
+    workspaceTemplateKnowledgeDescription: "Centraliza preguntas, hallazgos y referencias de investigación.",
+    workspaceDuplicateSuffix: "copia",
+    workspaceSearchPlaceholder: "Buscar páginas o etiquetas",
+    workspaceFilterAll: "Todas las etiquetas",
+    workspaceTagsLabel: "Etiquetas",
+    workspaceEmpty: "No hay páginas todavía.",
+    workspaceCreateFirst: "Crea una página para diseñar tu sistema.",
+    workspaceFavorite: "Favorita",
+    workspaceFavoriteTooltip: "Marcar como favorita",
+    workspaceLastEdited: "Actualizada",
+    workspaceTitlePlaceholder: "Página sin título",
+    workspaceDescriptionPlaceholder: "Describe el propósito o el resultado deseado",
+    workspaceTagsPlaceholder: "Ej. focus, universidad",
+    workspaceIconLabel: "Icono",
+    workspaceColorLabel: "Color",
+    workspaceActions: "Acciones",
+    workspaceDuplicate: "Duplicar",
+    workspaceDelete: "Eliminar",
+    workspaceDeleteConfirm: "¿Eliminar esta página? Perderás sus bloques.",
+    workspaceAddBlock: "Agregar bloque",
+    workspaceAddHeading: "Encabezado",
+    workspaceAddTodo: "Checklist",
+    workspaceAddText: "Nota",
+    workspaceAddDivider: "Separador",
+    workspaceNoBlocks: "Añade bloques para estructurar esta página.",
+    workspaceChangeAccent: "Cambiar acento",
+    workspaceBlockToday: "Victoria de hoy",
+    workspaceBlockDailyFocus: "Bloque crítico del día",
+    workspaceBlockDailySecondary: "Segundo empuje",
+    workspaceBlockSharpen: "Cierre / aprendizaje clave",
+    workspaceBlockHighlights: "Highlights",
+    workspaceBlockHighlightsHint: "Resume logros, aprendizajes y pendientes rápidos.",
+    workspaceBlockNorthStar: "North Star",
+    workspaceBlockNorthStarHint: "Define qué impacto buscas lograr con este proyecto.",
+    workspaceBlockRoadmap: "Roadmap inmediato",
+    workspaceBlockMilestoneOne: "Hito 1 listo",
+    workspaceBlockMilestoneTwo: "Hito 2 encaminado",
+    workspaceBlockMilestoneThree: "Hito 3 desbloqueado",
+    workspaceBlockResources: "Recursos & enlaces",
+    workspaceBlockResourcesHint: "Pega referencias, briefs y documentos críticos.",
+    workspaceBlockQuestions: "Preguntas guía",
+    workspaceBlockQuestionsHint: "Qué necesitas comprender o validar con esta investigación.",
+    workspaceBlockIdeas: "Ideas en progreso",
+    workspaceBlockIdeasHint: "Captura hipótesis, conceptos y experimentos en curso.",
+    workspaceBlockReferences: "Referencias",
+    workspaceBlockReferencesHint: "Guarda lecturas, videos y contactos clave.",
+    workspaceBlockBlankHeading: "Nuevo bloque",
+    workspaceBlockBlankHint: "Agrega texto, checklist o encabezados para darle forma.",
+    workspaceBlockNewHeading: "Nuevo encabezado",
+    workspaceBlockNewTodo: "Nueva tarea",
+    workspaceBlockNewText: "Nuevo texto",
+    workspaceDividerLabel: "Separador",
+    calendar: "Calendario",
+    calendarHeading: "Google Calendar",
+    calendarIntro: "Sincroniza tus eventos para planear alrededor de compromisos reales.",
+    calendarStatus: "Estado",
+    calendarStatusReadyHint: "Listo para conectar",
+    calendarStatusIdle: "Desconectado",
+    calendarStatusLoading: "Sincronizando…",
+    calendarStatusConnected: "Conectado",
+    calendarStatusError: "Error",
+    calendarReady: "API cargada",
+    calendarNotReady: "Esperando a Google",
+    calendarConnect: "Conectar con Google",
+    calendarRefresh: "Actualizar eventos",
+    calendarDisconnect: "Desconectar",
+    calendarConfigTitle: "Credenciales",
+    calendarApiKey: "API key",
+    calendarClientId: "Client ID de OAuth",
+    calendarCalendarId: "ID de calendario",
+    calendarTimezone: "Zona horaria",
+    calendarLookAhead: "Ventana",
+    calendarLookAheadSuffix: "días",
+    calendarHint: "Usa credenciales OAuth de tipo web (https://developers.google.com/calendar) y habilita Calendar API.",
+    calendarInstructions: "Al conectar, los eventos próximos aparecerán aquí con horarios y enlaces.",
+    calendarUpcoming: "Eventos próximos",
+    calendarNoEvents: "No hay eventos en la ventana seleccionada.",
+    calendarLastSync: "Última sincronización",
+    calendarSignedInAs: "Sesión iniciada como",
+    calendarOpenEvent: "Abrir en Google Calendar",
+    calendarEventAllDay: "Todo el día",
+    calendarManualLink: "Guía de credenciales",
+    calendarStatusNoApi: "No pudimos cargar el cliente de Google. Revisa tu conexión o bloqueadores.",
+    calendarConnecting: "Conectando con Google…",
+    calendarAuthRequired: "Inicia sesión para poder leer tu calendario.",
+    calendarUntitled: "(sin título)",
+    calendarSyncedAt: "Sincronizado a las {time}",
+    calendarUnknownError: "Ocurrió un error inesperado al sincronizar.",
+    calendarDisconnected: "Desconectado.",
   },
   en: {
     title: "AI Classroom · Execution Panel",
@@ -702,6 +963,111 @@ const strings = {
     bulkParsed: (count: number) => `${count} items added.`,
     priorityPromote: "Promote",
     priorityDemote: "Lower priority",
+    workspace: "Workspace",
+    workspacePages: "Smart pages",
+    workspaceSidebarHint: "Craft Notion-style views to anchor your focus, goals, and projects.",
+    workspaceNewPage: "New page",
+    workspaceTemplates: "Quick templates",
+    workspaceTemplateDailyName: "Daily agenda",
+    workspaceTemplateProjectName: "Project",
+    workspaceTemplateKnowledgeName: "Lab",
+    workspaceTemplateBlankName: "Blank page",
+    workspaceTemplateBlankTitle: "Blank page",
+    workspaceTemplateBlankDescription: "Start with a clean canvas and build your own blocks.",
+    workspaceTemplateDailyTitle: "Daily execution agenda",
+    workspaceTemplateDailyDescription: "Align focus, minimum checklist, and end-of-day reflections.",
+    workspaceTemplateProjectTitle: "Project command board",
+    workspaceTemplateProjectDescription: "Surface the north star, key milestones, and critical resources.",
+    workspaceTemplateKnowledgeTitle: "Idea lab",
+    workspaceTemplateKnowledgeDescription: "Centralize guiding questions, findings, and references.",
+    workspaceDuplicateSuffix: "copy",
+    workspaceSearchPlaceholder: "Search pages or tags",
+    workspaceFilterAll: "All tags",
+    workspaceTagsLabel: "Tags",
+    workspaceEmpty: "No pages yet.",
+    workspaceCreateFirst: "Spin up a page to design your system.",
+    workspaceFavorite: "Favorite",
+    workspaceFavoriteTooltip: "Mark as favorite",
+    workspaceLastEdited: "Updated",
+    workspaceTitlePlaceholder: "Untitled page",
+    workspaceDescriptionPlaceholder: "Describe the purpose or desired outcome",
+    workspaceTagsPlaceholder: "e.g. focus, university",
+    workspaceIconLabel: "Icon",
+    workspaceColorLabel: "Color",
+    workspaceActions: "Actions",
+    workspaceDuplicate: "Duplicate",
+    workspaceDelete: "Delete",
+    workspaceDeleteConfirm: "Delete this page? Blocks will be removed as well.",
+    workspaceAddBlock: "Add block",
+    workspaceAddHeading: "Heading",
+    workspaceAddTodo: "Checklist",
+    workspaceAddText: "Note",
+    workspaceAddDivider: "Divider",
+    workspaceNoBlocks: "Add blocks to structure this page.",
+    workspaceChangeAccent: "Change accent",
+    workspaceBlockToday: "Win of the day",
+    workspaceBlockDailyFocus: "Critical focus block",
+    workspaceBlockDailySecondary: "Second push",
+    workspaceBlockSharpen: "Sharpen / key learning",
+    workspaceBlockHighlights: "Highlights",
+    workspaceBlockHighlightsHint: "Capture wins, insights, and quick follow-ups.",
+    workspaceBlockNorthStar: "North star",
+    workspaceBlockNorthStarHint: "Clarify the impact this project should deliver.",
+    workspaceBlockRoadmap: "Immediate roadmap",
+    workspaceBlockMilestoneOne: "Milestone 1 delivered",
+    workspaceBlockMilestoneTwo: "Milestone 2 in motion",
+    workspaceBlockMilestoneThree: "Milestone 3 unlocked",
+    workspaceBlockResources: "Resources & links",
+    workspaceBlockResourcesHint: "Drop references, briefs, and critical docs.",
+    workspaceBlockQuestions: "Guiding questions",
+    workspaceBlockQuestionsHint: "What do you need to validate or understand?",
+    workspaceBlockIdeas: "Ideas in progress",
+    workspaceBlockIdeasHint: "Capture hypotheses, concepts, and experiments.",
+    workspaceBlockReferences: "References",
+    workspaceBlockReferencesHint: "Store readings, videos, and key contacts.",
+    workspaceBlockBlankHeading: "New block",
+    workspaceBlockBlankHint: "Add text, checklists, or headings to shape the page.",
+    workspaceBlockNewHeading: "New heading",
+    workspaceBlockNewTodo: "New task",
+    workspaceBlockNewText: "New text",
+    workspaceDividerLabel: "Divider",
+    calendar: "Calendar",
+    calendarHeading: "Google Calendar",
+    calendarIntro: "Sync your events so the planner adapts to real commitments.",
+    calendarStatus: "Status",
+    calendarStatusReadyHint: "Ready to connect",
+    calendarStatusIdle: "Disconnected",
+    calendarStatusLoading: "Syncing…",
+    calendarStatusConnected: "Connected",
+    calendarStatusError: "Error",
+    calendarReady: "API loaded",
+    calendarNotReady: "Waiting for Google",
+    calendarConnect: "Connect Google",
+    calendarRefresh: "Refresh events",
+    calendarDisconnect: "Disconnect",
+    calendarConfigTitle: "Credentials",
+    calendarApiKey: "API key",
+    calendarClientId: "OAuth client ID",
+    calendarCalendarId: "Calendar ID",
+    calendarTimezone: "Time zone",
+    calendarLookAhead: "Window",
+    calendarLookAheadSuffix: "days",
+    calendarHint: "Use a web OAuth client with Calendar API enabled (https://developers.google.com/calendar).",
+    calendarInstructions: "After connecting you'll see upcoming events with rich details.",
+    calendarUpcoming: "Upcoming events",
+    calendarNoEvents: "No events in the selected window.",
+    calendarLastSync: "Last sync",
+    calendarSignedInAs: "Signed in as",
+    calendarOpenEvent: "Open in Google Calendar",
+    calendarEventAllDay: "All day",
+    calendarManualLink: "Credential guide",
+    calendarStatusNoApi: "We couldn't load the Google client. Check your connection or blockers.",
+    calendarConnecting: "Connecting to Google…",
+    calendarAuthRequired: "Sign in to read your calendar.",
+    calendarUntitled: "(untitled)",
+    calendarSyncedAt: "Synced at {time}",
+    calendarUnknownError: "Something went wrong while syncing.",
+    calendarDisconnected: "Disconnected.",
   }
 } as const;
 
@@ -726,6 +1092,32 @@ export default function Dashboard() {
   const [focusOnly, setFocusOnly] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+  const workspaceSeed = useMemo<WorkspacePage[]>(() => {
+    const stored = loadLS<WorkspacePage[]>(LS_KEYS.workspace, []);
+    if (stored.length) return stored;
+    return createDefaultWorkspacePages();
+  }, []);
+  const [workspacePages, setWorkspacePages] = useState<WorkspacePage[]>(workspaceSeed);
+  const [activeWorkspacePageId, setActiveWorkspacePageId] = useState<string>(() => {
+    const stored = loadLS<string | null>(LS_KEYS.workspaceActive, null);
+    return stored || workspaceSeed[0]?.id || "";
+  });
+  const [gcalConfig, setGcalConfig] = useState<GoogleCalendarConfig>(() => ({
+    ...DEFAULT_GCAL_CFG,
+    ...loadLS<GoogleCalendarConfig>(LS_KEYS.gcalCfg, DEFAULT_GCAL_CFG),
+  }));
+  const [gcalState, setGcalState] = useState<GoogleCalendarState>(() => {
+    const stored = loadLS<GoogleCalendarState>(LS_KEYS.gcalState, { status: "idle", events: [] });
+    return {
+      status: stored.status ?? "idle",
+      message: stored.message,
+      events: Array.isArray(stored.events) ? stored.events : [],
+      profile: stored.profile,
+      lastSyncedAt: stored.lastSyncedAt,
+    };
+  });
+  const [gapiReady, setGapiReady] = useState(false);
+  const gapiScriptLoaded = useRef(false);
 
   // Persistencia automática
   useEffect(() => saveLS(LS_KEYS.goals, goals), [goals]);
@@ -734,6 +1126,14 @@ export default function Dashboard() {
   useEffect(() => saveLS(LS_KEYS.cfg, cfg), [cfg]);
   useEffect(() => saveLS(LS_KEYS.projects, projects), [projects]);
   useEffect(() => saveLS(LS_KEYS.focus, aiFocus), [aiFocus]);
+  useEffect(() => saveLS(LS_KEYS.workspace, workspacePages), [workspacePages]);
+  useEffect(() => {
+    if (activeWorkspacePageId) {
+      saveLS(LS_KEYS.workspaceActive, activeWorkspacePageId);
+    }
+  }, [activeWorkspacePageId]);
+  useEffect(() => saveLS(LS_KEYS.gcalCfg, gcalConfig), [gcalConfig]);
+  useEffect(() => saveLS(LS_KEYS.gcalState, gcalState), [gcalState]);
 
   useEffect(() => {
     const today = todayISO().slice(0, 10);
@@ -752,6 +1152,52 @@ export default function Dashboard() {
       setFocusOnly(false);
     }
   }, [aiFocus, focusOnly]);
+
+  useEffect(() => {
+    if (!workspacePages.length) {
+      const defaults = createDefaultWorkspacePages();
+      setWorkspacePages(defaults);
+      setActiveWorkspacePageId(defaults[0]?.id || "");
+      return;
+    }
+    if (!activeWorkspacePageId || !workspacePages.some(page => page.id === activeWorkspacePageId)) {
+      setActiveWorkspacePageId(workspacePages[0]?.id || "");
+    }
+  }, [workspacePages, activeWorkspacePageId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (gapiScriptLoaded.current && (window as any).gapi) {
+      setGapiReady(true);
+      return;
+    }
+    if (document.querySelector('script[data-google-api="true"]')) {
+      gapiScriptLoaded.current = true;
+      if ((window as any).gapi) {
+        setGapiReady(true);
+      }
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://apis.google.com/js/api.js";
+    script.async = true;
+    script.defer = true;
+    script.dataset.googleApi = "true";
+    script.onload = () => {
+      gapiScriptLoaded.current = true;
+      setGapiReady(true);
+    };
+    script.onerror = () => {
+      gapiScriptLoaded.current = true;
+      setGapiReady(false);
+      setGcalState(prev => ({
+        ...prev,
+        status: prev.status === "connected" ? prev.status : "error",
+        message: prev.message || "No se pudo cargar Google API",
+      }));
+    };
+    document.body.appendChild(script);
+  }, [setGcalState]);
 
   const registerProject = useCallback((name: string) => {
     const trimmed = name.trim();
@@ -790,6 +1236,10 @@ export default function Dashboard() {
   const todayKey = todayISO().slice(0, 10);
   const defaultProject = projects[0] ?? "General";
   const focusTodayIds = useMemo(() => new Set(aiFocus.date === todayKey ? aiFocus.taskIds : []), [aiFocus, todayKey]);
+  const activeWorkspacePage = useMemo(() => {
+    if (!workspacePages.length) return null;
+    return workspacePages.find(page => page.id === activeWorkspacePageId) ?? workspacePages[0];
+  }, [workspacePages, activeWorkspacePageId]);
   const priorityOrder: Record<Task["priority"], number> = { high: 0, med: 1, low: 2 };
   const visibleTasks = useMemo(() => {
     const normalized = taskSearch.trim().toLowerCase();
@@ -1002,6 +1452,282 @@ export default function Dashboard() {
     setProjects(prev => prev.filter(project => project !== name));
   }
 
+  const createWorkspacePage = useCallback(
+    (template: WorkspaceTemplateKey) => {
+      const now = new Date().toISOString();
+      const color = WORKSPACE_COLORS[Math.floor(Math.random() * WORKSPACE_COLORS.length)];
+      const iconMap: Record<WorkspaceTemplateKey, string> = {
+        blank: "📄",
+        daily: "🌅",
+        project: "🗂️",
+        knowledge: "🧠",
+      };
+      const titleMap: Record<WorkspaceTemplateKey, string> = {
+        blank: t.workspaceTemplateBlankTitle,
+        daily: t.workspaceTemplateDailyTitle,
+        project: t.workspaceTemplateProjectTitle,
+        knowledge: t.workspaceTemplateKnowledgeTitle,
+      };
+      const descMap: Record<WorkspaceTemplateKey, string> = {
+        blank: t.workspaceTemplateBlankDescription,
+        daily: t.workspaceTemplateDailyDescription,
+        project: t.workspaceTemplateProjectDescription,
+        knowledge: t.workspaceTemplateKnowledgeDescription,
+      };
+      const tagMap: Record<WorkspaceTemplateKey, string[]> = {
+        blank: ["notes"],
+        daily: ["daily", "ritual"],
+        project: ["project", "roadmap"],
+        knowledge: ["knowledge", "ideas"],
+      };
+      const buildBlocks = (): WorkspaceBlock[] => {
+        switch (template) {
+          case "daily":
+            return [
+              { id: uuidv4(), type: "heading", text: t.workspaceBlockToday, accent: "emerald" },
+              { id: uuidv4(), type: "todo", text: t.workspaceBlockDailyFocus, checked: false },
+              { id: uuidv4(), type: "todo", text: t.workspaceBlockDailySecondary, checked: false },
+              { id: uuidv4(), type: "todo", text: t.workspaceBlockSharpen, checked: false },
+              { id: uuidv4(), type: "divider", text: "" },
+              { id: uuidv4(), type: "heading", text: t.workspaceBlockHighlights, accent: "sky" },
+              { id: uuidv4(), type: "text", text: t.workspaceBlockHighlightsHint },
+            ];
+          case "project":
+            return [
+              { id: uuidv4(), type: "heading", text: t.workspaceBlockNorthStar, accent: "violet" },
+              { id: uuidv4(), type: "text", text: t.workspaceBlockNorthStarHint },
+              { id: uuidv4(), type: "heading", text: t.workspaceBlockRoadmap, accent: "emerald" },
+              { id: uuidv4(), type: "todo", text: t.workspaceBlockMilestoneOne, checked: false },
+              { id: uuidv4(), type: "todo", text: t.workspaceBlockMilestoneTwo, checked: false },
+              { id: uuidv4(), type: "todo", text: t.workspaceBlockMilestoneThree, checked: false },
+              { id: uuidv4(), type: "divider", text: "" },
+              { id: uuidv4(), type: "heading", text: t.workspaceBlockResources, accent: "sky" },
+              { id: uuidv4(), type: "text", text: t.workspaceBlockResourcesHint },
+            ];
+          case "knowledge":
+            return [
+              { id: uuidv4(), type: "heading", text: t.workspaceBlockQuestions, accent: "amber" },
+              { id: uuidv4(), type: "text", text: t.workspaceBlockQuestionsHint },
+              { id: uuidv4(), type: "heading", text: t.workspaceBlockIdeas, accent: "emerald" },
+              { id: uuidv4(), type: "text", text: t.workspaceBlockIdeasHint },
+              { id: uuidv4(), type: "heading", text: t.workspaceBlockReferences, accent: "sky" },
+              { id: uuidv4(), type: "text", text: t.workspaceBlockReferencesHint },
+            ];
+          default:
+            return [
+              { id: uuidv4(), type: "heading", text: t.workspaceBlockBlankHeading, accent: "slate" },
+              { id: uuidv4(), type: "text", text: t.workspaceBlockBlankHint },
+            ];
+        }
+      };
+      const page: WorkspacePage = {
+        id: uuidv4(),
+        icon: iconMap[template] ?? "📄",
+        title: titleMap[template],
+        description: descMap[template],
+        color,
+        createdAt: now,
+        updatedAt: now,
+        tags: tagMap[template],
+        favorite: template !== "blank",
+        blocks: buildBlocks(),
+      };
+      setWorkspacePages(prev => [page, ...prev]);
+      setActiveWorkspacePageId(page.id);
+    },
+    [t],
+  );
+
+  const updateWorkspacePage = useCallback((id: string, patch: Partial<WorkspacePage>) => {
+    setWorkspacePages(prev =>
+      prev.map(page =>
+        page.id === id
+          ? {
+              ...page,
+              ...patch,
+              blocks: patch.blocks ? patch.blocks : page.blocks,
+              updatedAt: new Date().toISOString(),
+            }
+          : page,
+      ),
+    );
+  }, []);
+
+  const updateWorkspaceBlocks = useCallback(
+    (id: string, blocks: WorkspaceBlock[]) => {
+      updateWorkspacePage(id, { blocks });
+    },
+    [updateWorkspacePage],
+  );
+
+  const toggleWorkspaceFavorite = useCallback((id: string) => {
+    setWorkspacePages(prev =>
+      prev.map(page =>
+        page.id === id
+          ? { ...page, favorite: !page.favorite, updatedAt: new Date().toISOString() }
+          : page,
+      ),
+    );
+  }, []);
+
+  const removeWorkspacePage = useCallback(
+    (id: string) => {
+      setWorkspacePages(prev => {
+        const filtered = prev.filter(page => page.id !== id);
+        if (!filtered.length) {
+          const defaults = createDefaultWorkspacePages();
+          setActiveWorkspacePageId(defaults[0]?.id || "");
+          return defaults;
+        }
+        if (id === activeWorkspacePageId || !filtered.some(page => page.id === activeWorkspacePageId)) {
+          setActiveWorkspacePageId(filtered[0]?.id || "");
+        }
+        return filtered;
+      });
+    },
+    [activeWorkspacePageId],
+  );
+
+  const duplicateWorkspacePage = useCallback(
+    (id: string) => {
+      const source = workspacePages.find(page => page.id === id);
+      if (!source) return;
+      const now = new Date().toISOString();
+      const copy: WorkspacePage = {
+        ...source,
+        id: uuidv4(),
+        title: `${source.title} · ${t.workspaceDuplicateSuffix}`,
+        favorite: false,
+        createdAt: now,
+        updatedAt: now,
+        blocks: source.blocks.map(block => ({ ...block, id: uuidv4() })),
+      };
+      setWorkspacePages(prev => [copy, ...prev]);
+      setActiveWorkspacePageId(copy.id);
+    },
+    [workspacePages, t.workspaceDuplicateSuffix],
+  );
+
+  const updateGcalConfig = useCallback((patch: Partial<GoogleCalendarConfig>) => {
+    setGcalConfig(prev => ({ ...prev, ...patch }));
+  }, []);
+
+  const syncGoogleCalendar = useCallback(
+    async (interactive: boolean) => {
+      if (!gapiReady || typeof window === "undefined" || !(window as any).gapi) {
+        setGcalState(prev => ({
+          ...prev,
+          status: "error",
+          message: t.calendarStatusNoApi,
+        }));
+        return;
+      }
+      const gapi = (window as any).gapi;
+      try {
+        setGcalState(prev => ({ ...prev, status: "loading", message: t.calendarConnecting }));
+        await new Promise<void>((resolve, reject) => {
+          gapi.load("client:auth2", { callback: resolve, onerror: reject });
+        });
+        await gapi.client.init({
+          apiKey: gcalConfig.apiKey,
+          clientId: gcalConfig.clientId,
+          discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"],
+          scope: "https://www.googleapis.com/auth/calendar.readonly",
+        });
+        const auth = gapi.auth2.getAuthInstance();
+        let user = auth.currentUser.get();
+        if (!user || !user.isSignedIn()) {
+          if (interactive) {
+            user = await auth.signIn();
+          } else {
+            try {
+              user = await auth.signIn({ prompt: "none" });
+            } catch {
+              user = auth.currentUser.get();
+            }
+          }
+        }
+        if (!user || !user.isSignedIn()) {
+          if (!interactive) {
+            setGcalState(prev => ({
+              ...prev,
+              status: "error",
+              message: t.calendarAuthRequired,
+            }));
+            return;
+          }
+          user = await auth.signIn();
+        }
+        const profile = user?.getBasicProfile ? user.getBasicProfile() : null;
+        const horizon = new Date();
+        const spanMs = gcalConfig.lookAheadDays * 24 * 60 * 60 * 1000;
+        const timeMin = new Date().toISOString();
+        const timeMax = new Date(horizon.getTime() + spanMs).toISOString();
+        const response = await gapi.client.calendar.events.list({
+          calendarId: gcalConfig.calendarId || "primary",
+          singleEvents: true,
+          orderBy: "startTime",
+          timeMin,
+          timeMax,
+          timeZone: gcalConfig.timeZone,
+          maxResults: 64,
+        });
+        const events = (response.result?.items || []).map((event: any) => ({
+          id: event.id,
+          summary: event.summary || t.calendarUntitled,
+          start: event.start?.dateTime || event.start?.date,
+          end: event.end?.dateTime || event.end?.date || event.start?.dateTime || event.start?.date,
+          location: event.location,
+          hangoutLink: event.hangoutLink || event.conferenceData?.entryPoints?.[0]?.uri,
+          description: event.description,
+        })) as GoogleCalendarEvent[];
+        setGcalState({
+          status: "connected",
+          message: t.calendarSyncedAt.replace("{time}", format(new Date(), "HH:mm")),
+          events,
+          profile: profile
+            ? {
+                name: profile.getName?.(),
+                email: profile.getEmail?.(),
+                avatar: profile.getImageUrl?.(),
+              }
+            : undefined,
+          lastSyncedAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.error(error);
+        setGcalState(prev => ({
+          ...prev,
+          status: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : typeof error === "string"
+              ? error
+              : t.calendarUnknownError,
+        }));
+      }
+    },
+    [gapiReady, gcalConfig, t.calendarConnecting, t.calendarSyncedAt, t.calendarUntitled, t.calendarStatusNoApi, t.calendarAuthRequired, t.calendarUnknownError],
+  );
+
+  const connectGoogleCalendar = useCallback(() => {
+    return syncGoogleCalendar(true);
+  }, [syncGoogleCalendar]);
+
+  const refreshGoogleCalendar = useCallback(() => {
+    return syncGoogleCalendar(false);
+  }, [syncGoogleCalendar]);
+
+  const disconnectGoogleCalendar = useCallback(async () => {
+    if (typeof window !== "undefined" && (window as any).gapi?.auth2) {
+      try {
+        await (window as any).gapi.auth2.getAuthInstance()?.signOut();
+      } catch {}
+    }
+    setGcalState({ status: "idle", events: [], message: t.calendarDisconnected, profile: undefined, lastSyncedAt: undefined });
+  }, [t.calendarDisconnected]);
+
   // ====== Import/Export ======
   function exportAll() {
     const blob = new Blob([JSON.stringify({ goals, tasks, reviews, cfg }, null, 2)], { type: 'application/json' });
@@ -1117,17 +1843,23 @@ export default function Dashboard() {
         </div>
 
         <Tabs defaultValue="tasks" className="w-full">
-          <TabsList className="flex flex-wrap gap-2">
-            <TabsTrigger value="tasks">{t.tasks}</TabsTrigger>
-            <TabsTrigger value="goals">{t.goals}</TabsTrigger>
-            <TabsTrigger value="week">{t.week}</TabsTrigger>
-            <TabsTrigger value="coach">{t.aiCoach}</TabsTrigger>
-            <TabsTrigger value="backlog">{t.backlog}</TabsTrigger>
-            <TabsTrigger value="focus">{t.focus}</TabsTrigger>
-            <TabsTrigger value="templates">{t.templates}</TabsTrigger>
-            <TabsTrigger value="review">{t.review}</TabsTrigger>
-            <TabsTrigger value="settings"><Settings className="h-4 w-4" /></TabsTrigger>
-          </TabsList>
+        <TabsList className="flex flex-wrap gap-2">
+          <TabsTrigger value="tasks">{t.tasks}</TabsTrigger>
+          <TabsTrigger value="goals">{t.goals}</TabsTrigger>
+          <TabsTrigger value="week">{t.week}</TabsTrigger>
+          <TabsTrigger value="workspace" className="flex items-center gap-1">
+            <LayoutDashboard className="h-4 w-4" /> {t.workspace}
+          </TabsTrigger>
+          <TabsTrigger value="coach">{t.aiCoach}</TabsTrigger>
+          <TabsTrigger value="calendar" className="flex items-center gap-1">
+            <CalendarDays className="h-4 w-4" /> {t.calendar}
+          </TabsTrigger>
+          <TabsTrigger value="backlog">{t.backlog}</TabsTrigger>
+          <TabsTrigger value="focus">{t.focus}</TabsTrigger>
+          <TabsTrigger value="templates">{t.templates}</TabsTrigger>
+          <TabsTrigger value="review">{t.review}</TabsTrigger>
+          <TabsTrigger value="settings"><Settings className="h-4 w-4" /></TabsTrigger>
+        </TabsList>
 
           {/* ====== TAREAS ====== */}
           <TabsContent value="tasks" className="mt-4">
@@ -1289,6 +2021,37 @@ export default function Dashboard() {
             <WeekPlan tasks={tasks} addTask={addTask} t={t} defaultProject={defaultProject} />
           </TabsContent>
 
+          {/* ====== WORKSPACE ====== */}
+          <TabsContent value="workspace" className="mt-4">
+            <WorkspaceStudio
+              pages={workspacePages}
+              activePage={activeWorkspacePage}
+              activePageId={activeWorkspacePageId}
+              onSelectPage={setActiveWorkspacePageId}
+              onCreatePage={createWorkspacePage}
+              onUpdatePage={updateWorkspacePage}
+              onUpdateBlocks={updateWorkspaceBlocks}
+              onRemovePage={removeWorkspacePage}
+              onDuplicatePage={duplicateWorkspacePage}
+              onToggleFavorite={toggleWorkspaceFavorite}
+              t={t}
+            />
+          </TabsContent>
+
+          {/* ====== CALENDARIO ====== */}
+          <TabsContent value="calendar" className="mt-4">
+            <CalendarPane
+              config={gcalConfig}
+              state={gcalState}
+              ready={gapiReady}
+              onConfigChange={updateGcalConfig}
+              onConnect={connectGoogleCalendar}
+              onRefresh={refreshGoogleCalendar}
+              onDisconnect={disconnectGoogleCalendar}
+              t={t}
+            />
+          </TabsContent>
+
           {/* ====== MOTOR IA ====== */}
           <TabsContent value="coach" className="mt-4">
             <AIPlanner snapshot={aiSnapshot} onApply={() => applyAiPlan(aiSnapshot)} focusState={aiFocus} t={t} />
@@ -1327,7 +2090,7 @@ export default function Dashboard() {
                   <DialogTrigger asChild>
                     <Button size="lg">{t.grade}</Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="max-w-2xl rounded-3xl border border-neutral-200/70 bg-white/95 shadow-2xl backdrop-blur-xl dark:border-neutral-800/70 dark:bg-neutral-950/90">
                     <DialogHeader>
                       <DialogTitle>{t.review}</DialogTitle>
                     </DialogHeader>
@@ -1391,6 +2154,805 @@ export default function Dashboard() {
 }
 
 // ============== Subcomponentes ==============
+function WorkspaceStudio({
+  pages,
+  activePage,
+  activePageId,
+  onSelectPage,
+  onCreatePage,
+  onUpdatePage,
+  onUpdateBlocks,
+  onRemovePage,
+  onDuplicatePage,
+  onToggleFavorite,
+  t,
+}: {
+  pages: WorkspacePage[];
+  activePage: WorkspacePage | null;
+  activePageId: string | null;
+  onSelectPage: (id: string) => void;
+  onCreatePage: (template: WorkspaceTemplateKey) => void;
+  onUpdatePage: (id: string, patch: Partial<WorkspacePage>) => void;
+  onUpdateBlocks: (id: string, blocks: WorkspaceBlock[]) => void;
+  onRemovePage: (id: string) => void;
+  onDuplicatePage: (id: string) => void;
+  onToggleFavorite: (id: string) => void;
+  t: any;
+}) {
+  const [search, setSearch] = useState("");
+  const [tagFilter, setTagFilter] = useState<string>("all");
+
+  const templateOptions = useMemo(
+    () => [
+      { key: "daily" as WorkspaceTemplateKey, label: t.workspaceTemplateDailyName },
+      { key: "project" as WorkspaceTemplateKey, label: t.workspaceTemplateProjectName },
+      { key: "knowledge" as WorkspaceTemplateKey, label: t.workspaceTemplateKnowledgeName },
+      { key: "blank" as WorkspaceTemplateKey, label: t.workspaceNewPage },
+    ],
+    [t.workspaceTemplateDailyName, t.workspaceTemplateProjectName, t.workspaceTemplateKnowledgeName, t.workspaceNewPage],
+  );
+
+  const tags = useMemo(() => {
+    const set = new Set<string>();
+    pages.forEach(page => page.tags.forEach(tag => set.add(tag)));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+  }, [pages]);
+
+  const filteredPages = useMemo(() => {
+    const normalized = search.trim().toLowerCase();
+    const tag = tagFilter.toLowerCase();
+    return pages
+      .filter(page => (tagFilter === "all" ? true : page.tags.some(tg => tg.toLowerCase() === tag)))
+      .filter(page =>
+        normalized
+          ? `${page.title} ${page.description ?? ""} ${page.tags.join(" ")}`
+              .toLowerCase()
+              .includes(normalized)
+          : true,
+      )
+      .sort((a, b) => {
+        if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      });
+  }, [pages, search, tagFilter]);
+
+  const renderPageButton = (page: WorkspacePage) => {
+    const styles = WORKSPACE_COLOR_STYLES[page.color] ?? WORKSPACE_COLOR_STYLES.default;
+    const isActive = activePageId === page.id;
+    return (
+      <button
+        key={page.id}
+        onClick={() => onSelectPage(page.id)}
+        className={`group relative w-full rounded-2xl border border-neutral-200/70 bg-gradient-to-br ${
+          styles.bg
+        } p-3 text-left transition-all hover:-translate-y-[2px] hover:shadow-lg dark:border-neutral-800/70 ${
+          isActive ? `${styles.ring} ring-2` : ""
+        }`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className={`flex items-center gap-2 text-sm font-semibold ${styles.text}`}>
+            <span className="text-base">{page.icon}</span>
+            <span className="line-clamp-1">{page.title}</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+            {page.favorite && (
+              <Badge variant="secondary" className="bg-amber-500/20 text-amber-600 dark:text-amber-200">
+                <Star className="mr-1 h-3 w-3 fill-current" />
+                {t.workspaceFavorite}
+              </Badge>
+            )}
+            <span>
+              {t.workspaceLastEdited}: {format(new Date(page.updatedAt), "dd MMM HH:mm")}
+            </span>
+          </div>
+        </div>
+        {page.tags.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1 text-[11px]">
+            {page.tags.map(tag => (
+              <span key={tag} className={`rounded-full px-2 py-0.5 ${styles.pill}`}>
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
+        {page.description && (
+          <div className="mt-2 text-xs text-neutral-600 dark:text-neutral-300 line-clamp-2">
+            {page.description}
+          </div>
+        )}
+      </button>
+    );
+  };
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[280px,1fr]">
+      <Card className="h-full">
+        <CardHeader className="space-y-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <BookOpen className="h-4 w-4" /> {t.workspacePages}
+          </CardTitle>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">{t.workspaceSidebarHint}</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {templateOptions.map(option => (
+              <Button
+                key={option.key}
+                size="sm"
+                variant="secondary"
+                onClick={() => onCreatePage(option.key)}
+                className="flex items-center gap-1 rounded-full bg-white/80 shadow-sm transition hover:-translate-y-[1px] dark:bg-neutral-900/70"
+              >
+                <Plus className="h-3.5 w-3.5" /> {option.label}
+              </Button>
+            ))}
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              {t.workspaceSearchPlaceholder}
+            </Label>
+            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.workspaceSearchPlaceholder} />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              {t.workspaceTagsLabel}
+            </Label>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant={tagFilter === "all" ? "default" : "ghost"}
+                onClick={() => setTagFilter("all")}
+                className="rounded-full"
+              >
+                {t.workspaceFilterAll}
+              </Button>
+              {tags.map(tag => (
+                <Button
+                  key={tag}
+                  size="sm"
+                  variant={tagFilter === tag ? "default" : "ghost"}
+                  onClick={() => setTagFilter(tag)}
+                  className="rounded-full"
+                >
+                  #{tag}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
+            {filteredPages.length === 0 ? (
+              <div className="rounded-2xl border border-dashed p-4 text-sm text-neutral-500 dark:text-neutral-400">
+                {pages.length === 0 ? t.workspaceCreateFirst : t.workspaceEmpty}
+              </div>
+            ) : (
+              filteredPages.map(renderPageButton)
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="space-y-4">
+        {activePage ? (
+          <WorkspacePageView
+            page={activePage}
+            onUpdatePage={onUpdatePage}
+            onUpdateBlocks={onUpdateBlocks}
+            onRemovePage={onRemovePage}
+            onDuplicatePage={onDuplicatePage}
+            onToggleFavorite={onToggleFavorite}
+            t={t}
+          />
+        ) : (
+          <Card className="h-full">
+            <CardContent className="flex h-full flex-col items-center justify-center gap-3 text-center">
+              <Sparkles className="h-10 w-10 text-emerald-400" />
+              <div className="text-lg font-semibold">{t.workspace}</div>
+              <p className="max-w-sm text-sm text-neutral-500 dark:text-neutral-400">{t.workspaceCreateFirst}</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WorkspacePageView({
+  page,
+  onUpdatePage,
+  onUpdateBlocks,
+  onRemovePage,
+  onDuplicatePage,
+  onToggleFavorite,
+  t,
+}: {
+  page: WorkspacePage;
+  onUpdatePage: (id: string, patch: Partial<WorkspacePage>) => void;
+  onUpdateBlocks: (id: string, blocks: WorkspaceBlock[]) => void;
+  onRemovePage: (id: string) => void;
+  onDuplicatePage: (id: string) => void;
+  onToggleFavorite: (id: string) => void;
+  t: any;
+}) {
+  const [title, setTitle] = useState(page.title);
+  const [description, setDescription] = useState(page.description ?? "");
+  const [icon, setIcon] = useState(page.icon);
+  const [tagsText, setTagsText] = useState(page.tags.join(", "));
+
+  useEffect(() => {
+    setTitle(page.title);
+    setDescription(page.description ?? "");
+    setIcon(page.icon);
+    setTagsText(page.tags.join(", "));
+  }, [page.id, page.title, page.description, page.icon, page.tags]);
+
+  const styles = WORKSPACE_COLOR_STYLES[page.color] ?? WORKSPACE_COLOR_STYLES.default;
+  const quickIcons = ["🚀", "🎯", "🧠", "📚", "💡", "📝", "🗂️", "🌿", "💻"];
+
+  const handleTagsBlur = () => {
+    const tags = tagsText
+      .split(",")
+      .map(tag => tag.trim())
+      .filter(Boolean);
+    onUpdatePage(page.id, { tags });
+  };
+
+  const gradientByColor: Record<string, string> = {
+    emerald: "linear-gradient(135deg, rgba(16,185,129,0.7) 0%, rgba(56,189,248,0.35) 100%)",
+    sky: "linear-gradient(135deg, rgba(56,189,248,0.7) 0%, rgba(14,165,233,0.35) 100%)",
+    violet: "linear-gradient(135deg, rgba(139,92,246,0.7) 0%, rgba(59,130,246,0.35) 100%)",
+    amber: "linear-gradient(135deg, rgba(245,158,11,0.75) 0%, rgba(251,191,36,0.45) 100%)",
+    rose: "linear-gradient(135deg, rgba(244,114,182,0.7) 0%, rgba(244,63,94,0.35) 100%)",
+    slate: "linear-gradient(135deg, rgba(148,163,184,0.7) 0%, rgba(100,116,139,0.35) 100%)",
+  };
+
+  const handleAddBlock = (type: WorkspaceBlock["type"]) => {
+    const defaultTextMap: Record<WorkspaceBlock["type"], string> = {
+      heading: t.workspaceBlockNewHeading,
+      todo: t.workspaceBlockNewTodo,
+      text: t.workspaceBlockNewText,
+      divider: "",
+    };
+    const block: WorkspaceBlock = {
+      id: uuidv4(),
+      type,
+      text: defaultTextMap[type] ?? "",
+      checked: false,
+      accent: page.color,
+    };
+    onUpdateBlocks(page.id, [...page.blocks, block]);
+  };
+
+  const handleBlockChange = (blockId: string, patch: Partial<WorkspaceBlock>) => {
+    onUpdateBlocks(
+      page.id,
+      page.blocks.map(block => (block.id === blockId ? { ...block, ...patch } : block)),
+    );
+  };
+
+  const handleBlockMove = (blockId: string, direction: -1 | 1) => {
+    const index = page.blocks.findIndex(block => block.id === blockId);
+    if (index < 0) return;
+    const target = index + direction;
+    if (target < 0 || target >= page.blocks.length) return;
+    const next = [...page.blocks];
+    const [item] = next.splice(index, 1);
+    next.splice(target, 0, item);
+    onUpdateBlocks(page.id, next);
+  };
+
+  const handleBlockRemove = (blockId: string) => {
+    onUpdateBlocks(page.id, page.blocks.filter(block => block.id !== blockId));
+  };
+
+  const handleCycleAccent = (blockId: string) => {
+    const index = page.blocks.findIndex(block => block.id === blockId);
+    if (index < 0) return;
+    const current = page.blocks[index];
+    const paletteIndex = WORKSPACE_COLORS.findIndex(color => color === current.accent);
+    const nextColor = WORKSPACE_COLORS[(paletteIndex + 1) % WORKSPACE_COLORS.length];
+    handleBlockChange(blockId, { accent: nextColor });
+  };
+
+  return (
+    <Card className="overflow-hidden">
+      <div className={`h-28 bg-gradient-to-r ${styles.bg}`} />
+      <CardContent className="-mt-16 space-y-6 rounded-t-3xl border border-neutral-200/70 bg-white/90 p-6 shadow-xl backdrop-blur-sm dark:border-neutral-800/60 dark:bg-neutral-950/80">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <Input
+                value={icon}
+                onChange={e => setIcon(e.target.value)}
+                onBlur={() => onUpdatePage(page.id, { icon: icon || "📄" })}
+                className="h-12 w-16 text-2xl"
+                aria-label={t.workspaceIconLabel}
+              />
+              <div className="space-y-2">
+                <Input
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  onBlur={() => onUpdatePage(page.id, { title: title.trim() || t.workspaceTitlePlaceholder })}
+                  placeholder={t.workspaceTitlePlaceholder}
+                  className="text-lg font-semibold"
+                />
+                <Textarea
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  onBlur={() => onUpdatePage(page.id, { description })}
+                  placeholder={t.workspaceDescriptionPlaceholder}
+                  className="min-h-[80px] resize-y"
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+              <span>{t.workspaceColorLabel}</span>
+              {WORKSPACE_COLORS.map(color => (
+                <button
+                  key={color}
+                  className={`h-7 w-7 rounded-full border-2 transition ${
+                    page.color === color ? "border-emerald-500" : "border-transparent"
+                  }`}
+                  style={{ background: gradientByColor[color] ?? gradientByColor.emerald }}
+                  onClick={() => onUpdatePage(page.id, { color })}
+                  aria-label={`${t.workspaceColorLabel} ${color}`}
+                />
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+              <span>{t.workspaceTagsLabel}</span>
+              <Input
+                value={tagsText}
+                onChange={e => setTagsText(e.target.value)}
+                onBlur={handleTagsBlur}
+                placeholder={t.workspaceTagsPlaceholder}
+                className="max-w-sm"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {quickIcons.map(item => (
+                <Button
+                  key={item}
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => {
+                    setIcon(item);
+                    onUpdatePage(page.id, { icon: item });
+                  }}
+                  aria-label={`${t.workspaceIconLabel} ${item}`}
+                >
+                  <span className="text-lg">{item}</span>
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 text-sm text-neutral-500 dark:text-neutral-400">
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant={page.favorite ? "default" : "ghost"}
+                onClick={() => onToggleFavorite(page.id)}
+                className="flex items-center gap-1"
+                aria-label={t.workspaceFavoriteTooltip}
+              >
+                <Star className={`h-4 w-4 ${page.favorite ? "fill-current" : ""}`} />
+                {t.workspaceFavorite}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => onDuplicatePage(page.id)}
+                className="flex items-center gap-1"
+              >
+                <ListPlus className="h-4 w-4" /> {t.workspaceDuplicate}
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => {
+                  if (window.confirm(t.workspaceDeleteConfirm)) {
+                    onRemovePage(page.id);
+                  }
+                }}
+                className="flex items-center gap-1"
+              >
+                <Trash2 className="h-4 w-4" /> {t.workspaceDelete}
+              </Button>
+            </div>
+            <div className="text-xs text-neutral-500 dark:text-neutral-400">
+              {t.workspaceLastEdited}: {format(new Date(page.updatedAt), "dd MMM yyyy · HH:mm")}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm font-semibold">{t.workspaceAddBlock}</div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="secondary" onClick={() => handleAddBlock("heading")}> 
+                <Sparkles className="mr-1 h-3.5 w-3.5" /> {t.workspaceAddHeading}
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => handleAddBlock("todo")}>
+                <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> {t.workspaceAddTodo}
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => handleAddBlock("text")}>
+                <Lightbulb className="mr-1 h-3.5 w-3.5" /> {t.workspaceAddText}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => handleAddBlock("divider")}>
+                <Minus className="mr-1 h-3.5 w-3.5" /> {t.workspaceAddDivider}
+              </Button>
+            </div>
+          </div>
+
+          {page.blocks.length === 0 ? (
+            <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-neutral-500 dark:text-neutral-400">
+              {t.workspaceNoBlocks}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {page.blocks.map((block, index) => (
+                <WorkspaceBlockItem
+                  key={block.id}
+                  block={block}
+                  onChange={patch => handleBlockChange(block.id, patch)}
+                  onRemove={() => handleBlockRemove(block.id)}
+                  onMoveUp={() => handleBlockMove(block.id, -1)}
+                  onMoveDown={() => handleBlockMove(block.id, 1)}
+                  onToggle={() => handleBlockChange(block.id, { checked: !block.checked })}
+                  onCycleAccent={() => handleCycleAccent(block.id)}
+                  isFirst={index === 0}
+                  isLast={index === page.blocks.length - 1}
+                  t={t}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function WorkspaceBlockItem({
+  block,
+  onChange,
+  onRemove,
+  onMoveUp,
+  onMoveDown,
+  onToggle,
+  onCycleAccent,
+  isFirst,
+  isLast,
+  t,
+}: {
+  block: WorkspaceBlock;
+  onChange: (patch: Partial<WorkspaceBlock>) => void;
+  onRemove: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onToggle: () => void;
+  onCycleAccent: () => void;
+  isFirst: boolean;
+  isLast: boolean;
+  t: any;
+}) {
+  const styles = WORKSPACE_COLOR_STYLES[block.accent ?? "default"] ?? WORKSPACE_COLOR_STYLES.default;
+
+  return (
+    <div
+      className={`relative overflow-hidden rounded-2xl border border-neutral-200/70 bg-white/90 p-4 shadow-sm transition-all hover:-translate-y-[2px] hover:shadow-lg dark:border-neutral-800/70 dark:bg-neutral-900/70`}
+    >
+      <div className="absolute inset-0 pointer-events-none opacity-70">
+        <div className={`absolute inset-0 bg-gradient-to-br ${styles.bg}`} />
+      </div>
+      <div className="relative space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <Badge variant="secondary" className={`${styles.pill} capitalize`}>
+            {block.type === "divider" ? t.workspaceDividerLabel : block.type}
+          </Badge>
+          <div className="flex items-center gap-1 text-neutral-500">
+            <Button variant="ghost" size="icon" onClick={onCycleAccent} aria-label={t.workspaceChangeAccent}>
+              <Palette className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={onMoveUp} disabled={isFirst} aria-label="Move block up">
+              <Upload className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={onMoveDown} disabled={isLast} aria-label="Move block down">
+              <Download className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={onRemove} aria-label={t.workspaceDelete}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {block.type === "heading" && (
+          <Input
+            value={block.text}
+            onChange={e => onChange({ text: e.target.value })}
+            className="text-lg font-semibold"
+          />
+        )}
+
+        {block.type === "text" && (
+          <Textarea
+            value={block.text}
+            onChange={e => onChange({ text: e.target.value })}
+            className="min-h-[80px]"
+          />
+        )}
+
+        {block.type === "todo" && (
+          <div className="flex items-start gap-3">
+            <Checkbox checked={!!block.checked} onCheckedChange={onToggle} />
+            <Input
+              value={block.text}
+              onChange={e => onChange({ text: e.target.value })}
+              className="flex-1"
+            />
+          </div>
+        )}
+
+        {block.type === "divider" && <div className="h-px w-full bg-neutral-300 dark:bg-neutral-700" />}
+      </div>
+    </div>
+  );
+}
+
+function CalendarPane({
+  config,
+  state,
+  ready,
+  onConfigChange,
+  onConnect,
+  onRefresh,
+  onDisconnect,
+  t,
+}: {
+  config: GoogleCalendarConfig;
+  state: GoogleCalendarState;
+  ready: boolean;
+  onConfigChange: (patch: Partial<GoogleCalendarConfig>) => void;
+  onConnect: () => void;
+  onRefresh: () => void;
+  onDisconnect: () => void;
+  t: any;
+}) {
+  const statusStyles = {
+    connected: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-200",
+    loading: "bg-sky-500/20 text-sky-700 dark:text-sky-200",
+    error: "bg-rose-500/20 text-rose-700 dark:text-rose-200",
+    idle: "bg-neutral-500/10 text-neutral-600 dark:text-neutral-300",
+  } as const;
+
+  const statusLabel =
+    state.status === "connected"
+      ? t.calendarStatusConnected
+      : state.status === "loading"
+      ? t.calendarStatusLoading
+      : state.status === "error"
+      ? t.calendarStatusError
+      : t.calendarStatusIdle;
+
+  const isConnected = state.status === "connected";
+  const isLoading = state.status === "loading";
+
+  const handleChange = (field: keyof GoogleCalendarConfig) => (value: string) => {
+    if (field === "lookAheadDays") {
+      const parsed = Math.max(1, Math.min(31, Number(value) || config.lookAheadDays));
+      onConfigChange({ lookAheadDays: parsed });
+      return;
+    }
+    onConfigChange({ [field]: value } as Partial<GoogleCalendarConfig>);
+  };
+
+  const renderEvent = (event: GoogleCalendarEvent) => {
+    const rawStart = new Date(event.start);
+    const rawEnd = event.end ? new Date(event.end) : rawStart;
+    const startDate = isNaN(rawStart.getTime()) ? new Date() : rawStart;
+    const endDate = isNaN(rawEnd.getTime()) ? startDate : rawEnd;
+    const allDay = event.start.length <= 10 || (event.start.length > 10 && event.start.endsWith("00:00:00Z"));
+    const dateLabel = allDay
+      ? format(startDate, "EEE dd MMM")
+      : format(startDate, "EEE dd MMM · HH:mm");
+    const timeLabel = allDay
+      ? t.calendarEventAllDay
+      : `${format(startDate, "HH:mm")} → ${format(endDate, "HH:mm")}`;
+
+    return (
+      <div
+        key={event.id}
+        className="rounded-2xl border border-neutral-200/60 bg-gradient-to-br from-slate-50 via-white to-slate-100 p-4 shadow-sm transition hover:-translate-y-[1px] hover:shadow-lg dark:border-neutral-800/60 dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">{event.summary}</div>
+            <div className="text-xs text-neutral-500 dark:text-neutral-400">{dateLabel}</div>
+          </div>
+          <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-200">
+            {timeLabel}
+          </Badge>
+        </div>
+        {event.location && (
+          <div className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">{event.location}</div>
+        )}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {event.hangoutLink && (
+            <a
+              href={event.hangoutLink}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-600 transition hover:bg-sky-500/20 dark:text-sky-300"
+            >
+              <Link2 className="h-3.5 w-3.5" /> {t.calendarOpenEvent}
+            </a>
+          )}
+          {event.description && (
+            <div className="rounded-full bg-neutral-500/10 px-3 py-1 text-xs text-neutral-600 dark:text-neutral-300">
+              {event.description.slice(0, 80)}{event.description.length > 80 ? "…" : ""}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="grid gap-4 xl:grid-cols-[340px,1fr]">
+      <Card>
+        <CardHeader className="space-y-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <CalendarDays className="h-4 w-4" /> {t.calendarHeading}
+          </CardTitle>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">{t.calendarIntro}</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <Badge className={statusStyles[state.status]}>{statusLabel}</Badge>
+            <Badge variant="outline" className="border-sky-400/50 text-sky-600 dark:text-sky-200">
+              {ready ? t.calendarReady : t.calendarNotReady}
+            </Badge>
+            {state.lastSyncedAt && (
+              <span className="text-neutral-500 dark:text-neutral-400">
+                {t.calendarLastSync}: {format(new Date(state.lastSyncedAt), "dd MMM HH:mm")}
+              </span>
+            )}
+          </div>
+
+          {state.message && (
+            <div className="rounded-2xl border border-dashed border-neutral-300/60 bg-white/70 p-3 text-xs text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900/70 dark:text-neutral-300">
+              {state.message}
+            </div>
+          )}
+
+          {state.profile && (
+            <div className="flex items-center gap-3 rounded-2xl border border-neutral-200/70 bg-white/80 p-3 text-sm dark:border-neutral-800/70 dark:bg-neutral-900/70">
+              <div className="h-9 w-9 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700">
+                {state.profile.avatar ? (
+                  <img src={state.profile.avatar} alt={state.profile.name ?? "profile"} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center text-lg">{state.profile.name?.[0] ?? "🌟"}</span>
+                )}
+              </div>
+              <div className="flex flex-col">
+                <span className="font-medium">{state.profile.name}</span>
+                <span className="text-xs text-neutral-500 dark:text-neutral-400">{t.calendarSignedInAs}: {state.profile.email}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={onConnect} disabled={!ready || isLoading} className="flex items-center gap-1">
+              <Sparkles className="h-4 w-4" /> {t.calendarConnect}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={onRefresh}
+              disabled={!isConnected || isLoading}
+              className="flex items-center gap-1"
+            >
+              <RefreshCw className="h-4 w-4" /> {t.calendarRefresh}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={onDisconnect}
+              disabled={state.status === "idle" && state.events.length === 0}
+              className="flex items-center gap-1 text-rose-500 hover:text-rose-600"
+            >
+              <XCircle className="h-4 w-4" /> {t.calendarDisconnect}
+            </Button>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label>{t.calendarApiKey}</Label>
+              <Input
+                value={config.apiKey}
+                onChange={e => handleChange("apiKey")(e.target.value)}
+                placeholder="AIza..."
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>{t.calendarClientId}</Label>
+              <Input
+                value={config.clientId}
+                onChange={e => handleChange("clientId")(e.target.value)}
+                placeholder="xxxx.apps.googleusercontent.com"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>{t.calendarCalendarId}</Label>
+              <Input
+                value={config.calendarId}
+                onChange={e => handleChange("calendarId")(e.target.value)}
+                placeholder="primary"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>{t.calendarTimezone}</Label>
+              <Input
+                value={config.timeZone}
+                onChange={e => handleChange("timeZone")(e.target.value)}
+                placeholder="America/Mexico_City"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>{t.calendarLookAhead}</Label>
+              <Input
+                type="number"
+                min={1}
+                max={31}
+                value={config.lookAheadDays}
+                onChange={e => handleChange("lookAheadDays")(e.target.value)}
+              />
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">{t.calendarLookAheadSuffix}</p>
+            </div>
+          </div>
+
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            {t.calendarHint}{" "}
+            <a
+              href="https://developers.google.com/calendar/api/quickstart/js"
+              target="_blank"
+              rel="noreferrer"
+              className="text-sky-600 underline dark:text-sky-300"
+            >
+              {t.calendarManualLink}
+            </a>
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="min-h-full">
+        <CardHeader className="space-y-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Target className="h-4 w-4" /> {t.calendarUpcoming}
+          </CardTitle>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">{t.calendarInstructions}</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isConnected ? (
+            state.events.length === 0 ? (
+              <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-neutral-500 dark:text-neutral-400">
+                {t.calendarNoEvents}
+              </div>
+            ) : (
+              state.events.map(renderEvent)
+            )
+          ) : (
+            <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-neutral-500 dark:text-neutral-400">
+              {ready ? t.calendarStatusReadyHint : t.calendarNotReady}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function AIPlanner({ snapshot, onApply, focusState, t }: { snapshot: AiEngineSnapshot; onApply: () => void; focusState: AiFocusState; t: any }) {
   const today = todayISO().slice(0, 10);
   const planEmpty = snapshot.plan.length === 0;
@@ -1805,7 +3367,7 @@ function BulkTaskDialog({
             <ListPlus className="h-4 w-4" /> {t.bulkTasks}
           </Button>
         </DialogTrigger>
-        <DialogContent>
+        <DialogContent className="max-w-xl rounded-3xl border border-neutral-200/70 bg-white/95 shadow-2xl backdrop-blur-xl dark:border-neutral-800/70 dark:bg-neutral-950/90">
           <DialogHeader>
             <DialogTitle>{t.bulkTasks}</DialogTitle>
           </DialogHeader>
@@ -1883,7 +3445,7 @@ function BulkGoalDialog({
             <ListPlus className="h-4 w-4" /> {t.bulkGoals}
           </Button>
         </DialogTrigger>
-        <DialogContent>
+        <DialogContent className="max-w-xl rounded-3xl border border-neutral-200/70 bg-white/95 shadow-2xl backdrop-blur-xl dark:border-neutral-800/70 dark:bg-neutral-950/90">
           <DialogHeader>
             <DialogTitle>{t.bulkGoals}</DialogTitle>
           </DialogHeader>
@@ -2201,7 +3763,7 @@ function TaskEditDialog({
 
   return (
     <Dialog open={open} onOpenChange={(state) => { if (!state) onClose(); }}>
-      <DialogContent>
+      <DialogContent className="max-w-2xl rounded-3xl border border-neutral-200/70 bg-white/95 shadow-2xl backdrop-blur-xl dark:border-neutral-800/70 dark:bg-neutral-950/90">
         <DialogHeader>
           <DialogTitle>{t.edit}</DialogTitle>
         </DialogHeader>
@@ -2347,7 +3909,7 @@ function GoalEditDialog({
 
   return (
     <Dialog open={open} onOpenChange={(state) => { if (!state) onClose(); }}>
-      <DialogContent>
+      <DialogContent className="max-w-2xl rounded-3xl border border-neutral-200/70 bg-white/95 shadow-2xl backdrop-blur-xl dark:border-neutral-800/70 dark:bg-neutral-950/90">
         <DialogHeader>
           <DialogTitle>{t.edit}</DialogTitle>
         </DialogHeader>
