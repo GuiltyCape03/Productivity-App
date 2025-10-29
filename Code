@@ -117,7 +117,7 @@ const LS_KEYS = {
   reviews: "nahum_cls_reviews",
   cfg: "nahum_cls_cfg",
   projects: "nahum_cls_projects",
-  focus: "nahum_cls_focus",
+  focus: "naHum_cls_focus",
 };
 
 type Cfg = {
