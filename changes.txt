@@ -1,4 +1,4 @@
 Summary of updates:
-- Added persistent project catalog with support for custom names from the UI.
-- Updated task and goal forms to create/select projects without editing code, including localized prompts.
-- Synced quick add and weekly planning helpers to honor the current default project selection.
+- Added an AI coach tab that diagnoses the day, prioritizes tasks and goals, and lets you adopt the suggested focus plan in one click.
+- Highlighted the tasks selected by the AI engine across the app and stored the daily focus snapshot for easy reference.
+- Exposed configuration for daily capacity and minimum focus tasks, powering smarter recommendations across languages.
