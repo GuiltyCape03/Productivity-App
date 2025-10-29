@@ -60,7 +60,7 @@ export function CalendarPanel() {
       <CardHeader className="flex items-center justify-between">
         <div>
           <CardTitle>{strings.title}</CardTitle>
-          <p className="text-xs text-white/60">{statusLabel}</p>
+          <p className="text-xs text-foreground-muted">{statusLabel}</p>
         </div>
         <div className="flex gap-2">
           {isCalendarConnected(connectedCalendar) ? (
@@ -76,16 +76,16 @@ export function CalendarPanel() {
       </CardHeader>
       <CardContent className="space-y-4">
         {upcoming.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-white/10 bg-white/5 p-5 text-sm text-white/60">
+          <p className="rounded-2xl border border-dashed border-border/60 bg-surface-base/40 p-5 text-sm text-foreground-muted">
             No hay eventos programados. Conecta Google Calendar o crea eventos manualmente desde tus tareas.
           </p>
         ) : (
           <div className="space-y-3">
             {upcoming.map((event) => (
-              <div key={event.id} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+              <div key={event.id} className="flex items-center justify-between rounded-2xl border border-border/60 bg-surface-base/40 px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium text-white">{event.title}</p>
-                  <p className="text-xs text-white/60">{new Date(event.start).toLocaleString()} — {new Date(event.end).toLocaleTimeString()}</p>
+                  <p className="text-sm font-medium text-foreground">{event.title}</p>
+                  <p className="text-xs text-foreground-muted">{new Date(event.start).toLocaleString()} — {new Date(event.end).toLocaleTimeString()}</p>
                 </div>
                 <Badge variant="outline">{event.source}</Badge>
               </div>

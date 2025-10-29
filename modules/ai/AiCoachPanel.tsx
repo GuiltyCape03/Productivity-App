@@ -1,28 +1,45 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { STRINGS } from "@/i18n/strings";
 import { useDashboard } from "@/modules/dashboard/DashboardProvider";
 import { buildSnapshot } from "@/lib/ai/snapshot";
-import { generateAssistantReply } from "@/lib/ai/chat";
-import { v4 as uuid } from "uuid";
+import { generateAssistantReply, loadAssistantMemory, type MemoryTurn } from "@/lib/ai/chat";
 
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
+function formatTimestamp(timestamp: string) {
+  const date = new Date(timestamp);
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 export function AiCoachPanel() {
   const dashboard = useDashboard();
-  const { tasks, goals, projects, events, preferences, pages, connectedCalendar, snapshot: storedSnapshot } = dashboard;
+  const {
+    tasks,
+    goals,
+    projects,
+    events,
+    preferences,
+    pages,
+    connectedCalendar,
+    snapshot: storedSnapshot,
+    activeProjectId,
+    setActiveProject,
+    refreshSnapshot
+  } = dashboard;
   const strings = STRINGS.es.ai;
   const [question, setQuestion] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<MemoryTurn[]>(() => loadAssistantMemory(activeProjectId));
+  const [isThinking, setIsThinking] = useState(false);
+
+  useEffect(() => {
+    setMessages(loadAssistantMemory(activeProjectId));
+  }, [activeProjectId]);
 
   const baseState = useMemo(
     () => ({
@@ -33,80 +50,159 @@ export function AiCoachPanel() {
       preferences,
       pages,
       connectedCalendar,
-      snapshot: storedSnapshot
+      snapshot: storedSnapshot,
+      activeProjectId
     }),
-    [tasks, goals, projects, events, preferences, pages, connectedCalendar, storedSnapshot]
+    [
+      tasks,
+      goals,
+      projects,
+      events,
+      preferences,
+      pages,
+      connectedCalendar,
+      storedSnapshot,
+      activeProjectId
+    ]
   );
 
   const snapshot = useMemo(() => storedSnapshot ?? buildSnapshot(baseState), [storedSnapshot, baseState]);
 
   const ask = () => {
     if (!question.trim()) return;
-    const prompt: Message = { id: uuid(), role: "user", content: question.trim() };
-    const replyText = generateAssistantReply(baseState, { question: question.trim(), userName: "creador" });
-    const response: Message = { id: uuid(), role: "assistant", content: replyText };
-    setMessages((prev) => [...prev, prompt, response]);
+    const prompt = question.trim();
+    setIsThinking(true);
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: prompt, timestamp: new Date().toISOString() }
+    ]);
     setQuestion("");
+
+    requestAnimationFrame(() => {
+      generateAssistantReply(baseState, {
+        question: prompt,
+        userName: "creador",
+        projectId: activeProjectId
+      });
+      setMessages(loadAssistantMemory(activeProjectId));
+      setIsThinking(false);
+      if (!storedSnapshot) {
+        refreshSnapshot();
+      }
+    });
   };
+
+  const projectOptions = [{ id: "", name: "Todos los proyectos" }, ...projects];
 
   return (
     <Card>
-      <CardHeader className="flex items-center justify-between">
-        <CardTitle>{strings.title}</CardTitle>
-        <Button variant="ghost" onClick={dashboard.refreshSnapshot}>
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <CardTitle>{strings.title}</CardTitle>
+          <p className="text-sm text-foreground-muted">
+            Diagnóstico diario con memoria breve. Planifica en bloques de 50/10 y obtén feedback contextual de tus proyectos.
+          </p>
+        </div>
+        <Button variant="secondary" onClick={refreshSnapshot} aria-label="Actualizar plan de IA">
           {strings.refresh}
         </Button>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+      <CardContent className="space-y-6">
+        <div className="space-y-3 rounded-2xl border border-border/60 bg-surface-base/40 p-4">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline">Foco</Badge>
-            {snapshot.focusProjects.length === 0 ? (
-              <span className="text-sm text-white/60">Registra tareas para descubrir tu foco automático.</span>
-            ) : (
-              snapshot.focusProjects.map((projectId) => {
-                const project = dashboard.projects.find((item) => item.id === projectId);
-                return (
-                  <Badge key={projectId} variant="sky">
-                    {project?.name ?? "Proyecto"}
-                  </Badge>
-                );
-              })
-            )}
+            <Badge variant="default">{snapshot.pendingCount} pendientes</Badge>
+            <Badge variant="outline">{snapshot.bandwidthEstimateMinutes} min disponibles</Badge>
+            {snapshot.nextBlock && <Badge variant="sky">{snapshot.nextBlock}</Badge>}
           </div>
-          <p className="mt-3 text-sm text-white/70">{snapshot.summary}</p>
-          <div className="mt-4 grid gap-2 text-sm text-white/60">
-            <p>
-              Capacidad disponible estimada: <span className="font-semibold text-white">{snapshot.bandwidthEstimateMinutes} min</span>
-            </p>
-            <p>Tareas recomendadas: {snapshot.recommendedTasks.map((id) => dashboard.tasks.find((task) => task.id === id)?.title).filter(Boolean).join(", ") || "Añade tareas"}</p>
-            <p>Hábitos sugeridos: {snapshot.suggestedHabits.join(", ") || "Define metas con vencimiento"}</p>
+          <p className="text-sm text-foreground">{snapshot.summary}</p>
+          <div className="flex flex-wrap gap-2 text-xs text-foreground-muted">
+            {snapshot.focusChips.map((chip) => (
+              <span key={chip} className="rounded-full bg-surface-muted/60 px-3 py-1">
+                {chip}
+              </span>
+            ))}
           </div>
         </div>
 
-        <div className="space-y-3">
-          <div className="flex gap-2">
-            <Input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={strings.askPlaceholder} onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                ask();
-              }
-            }} />
-            <Button onClick={ask}>Preguntar</Button>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="ai-project">Proyecto activo</Label>
+            <Select
+              id="ai-project"
+              value={activeProjectId ?? ""}
+              onChange={(event) => setActiveProject(event.target.value || null)}
+            >
+              {projectOptions.map((project) => (
+                <option key={project.id || "all"} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </Select>
+            <p className="text-xs text-foreground-muted">El copiloto memoriza hasta 10 turnos por proyecto.</p>
           </div>
-          <div className="space-y-3 max-h-64 overflow-y-auto pr-1 scrollbar-thin">
-            {messages.length === 0 ? (
-              <p className="text-sm text-white/60">
-                El chatbot conoce tus tareas, metas y eventos. Pregunta por tu avance, pide estimaciones o solicita un plan de rescate.
-              </p>
-            ) : (
-              messages.map((message) => (
-                <div key={message.id} className={message.role === "assistant" ? "rounded-2xl bg-accent-primary/10 p-3 text-sm text-white" : "rounded-2xl bg-white/10 p-3 text-sm text-white/80"}>
-                  {message.content}
+          <div className="space-y-2">
+            <Label>Hábitos sugeridos</Label>
+            <div className="rounded-xl border border-dashed border-border/60 bg-surface-base/30 p-3 text-xs text-foreground-muted">
+              {snapshot.suggestedHabits.length ? (
+                <ul className="space-y-1">
+                  {snapshot.suggestedHabits.map((habit) => (
+                    <li key={habit}>{habit}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>Define una meta con fecha para recibir recordatorios aquí.</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="ai-question">Haz una pregunta</Label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              id="ai-question"
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              placeholder={strings.askPlaceholder}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  ask();
+                }
+              }}
+            />
+            <Button onClick={ask} disabled={isThinking} aria-live="polite">
+              {isThinking ? "Pensando…" : "Preguntar"}
+            </Button>
+          </div>
+          <p className="text-xs text-foreground-muted">
+            Ejemplos: “¿Cómo voy con mi avance?”, “Propón un bloque para investigación”, “Resume mi calendario”.
+          </p>
+        </div>
+
+        <div className="max-h-72 space-y-3 overflow-y-auto pr-1 scrollbar-thin" role="log" aria-live="polite">
+          {messages.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-border/60 bg-surface-base/30 p-4 text-sm text-foreground-muted">
+              El chatbot conoce tus tareas, metas y calendario. Haz una pregunta para iniciar la conversación.
+            </p>
+          ) : (
+            messages.map((message, index) => (
+              <div
+                key={`${message.timestamp}-${index}`}
+                className={
+                  message.role === "assistant"
+                    ? "rounded-2xl bg-accent-primary/15 p-3 text-sm text-foreground"
+                    : "rounded-2xl border border-border/60 bg-surface-base/40 p-3 text-sm text-foreground"
+                }
+              >
+                <div className="flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.18em] text-foreground-muted">
+                  <span>{message.role === "assistant" ? "Copiloto" : "Tú"}</span>
+                  <span>{formatTimestamp(message.timestamp)}</span>
                 </div>
-              ))
-            )}
-          </div>
+                <p className="mt-2 whitespace-pre-line leading-relaxed">{message.content}</p>
+              </div>
+            ))
+          )}
         </div>
       </CardContent>
     </Card>
