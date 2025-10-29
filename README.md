@@ -12,9 +12,10 @@ NeuralDesk es un panel de productividad construido con Next.js 14 y Tailwind que
 
 ## Diseño y temas
 
-- **Tipografías**: el proyecto carga [Inter](https://fonts.google.com/specimen/Inter) para texto y [Fraunces](https://fonts.google.com/specimen/Fraunces) para titulares mediante `next/font/google`. Las familias quedan disponibles como variables CSS `--font-sans` y `--font-serif`.
-- **Tokens**: los colores clave se definen en `app/globals.css` usando variables (`--surface-base`, `--surface-elevated`, `--surface-muted`, `--foreground-strong`, `--accent-*`) y se exponen en Tailwind a través de `tailwind.config.ts`.
-- **Modo claro/oscuro**: el tema activo se controla con el atributo `data-theme` del elemento `<html>`. Desde la UI puedes alternarlo en **Personaliza → Tema**, o manualmente estableciendo `document.documentElement.dataset.theme = "light" | "dark"`.
+- **Tipografías**: el proyecto carga [Inter](https://fonts.google.com/specimen/Inter) como tipografía base y [Noto Color Emoji](https://fonts.google.com/noto/specimen/Noto+Color+Emoji) para los iconos tipo Notion mediante `next/font/google`. Las familias se inyectan como variables CSS `--font-sans` y `--font-emoji`.
+- **Tokens**: los colores clave se definen en `app/globals.css` usando variables (`--surface-base`, `--surface-elevated`, `--surface-muted`, `--foreground-strong`, `--accent-*`) y se exponen en Tailwind a través de `tailwind.config.ts`. También se definen variables para el padding dinámico de las tarjetas según la densidad seleccionada.
+- **Modo claro/oscuro**: el tema activo se controla con el atributo `data-theme` del elemento `<html>`. Desde la UI puedes alternarlo en **Personaliza → Tema**, o manualmente estableciendo `document.documentElement.dataset.theme = "light" | "dark"`. El modo claro usa superficies crema (`#FAFAFC`) y texto `#0B0F12` para cumplir AA.
+- **Densidad**: el atributo `data-density` del `<body>` acepta los valores `comfortable`, `cozy` o `compact`. Cambia la densidad desde preferencias o con `document.body.dataset.density = "cozy"` para ajustar espacios y padding en tiempo real.
 
 ## Estructura del proyecto
 

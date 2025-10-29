@@ -1,9 +1,10 @@
-import { Inter, Fraunces } from "next/font/google";
-import "./globals.css";
 import type { Metadata } from "next";
+import { Inter, Noto_Color_Emoji } from "next/font/google";
+import { cn } from "@/styles/utils";
+import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
-const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-serif", weight: ["400", "500", "600", "700"] });
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
+const emoji = Noto_Color_Emoji({ subsets: ["emoji"], variable: "--font-emoji" });
 
 export const metadata: Metadata = {
   title: "NeuralDesk",
@@ -14,9 +15,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es" suppressHydrationWarning>
       <body
-        className={`${inter.variable} ${fraunces.variable} bg-radial-hero bg-surface-base text-foreground antialiased font-sans min-h-screen`}
+        className={cn(
+          inter.variable,
+          emoji.variable,
+          "bg-surface-base text-foreground antialiased font-sans min-h-screen"
+        )}
       >
-        {children}
+        <div className="min-h-screen bg-radial-hero">
+          {children}
+        </div>
       </body>
     </html>
   );

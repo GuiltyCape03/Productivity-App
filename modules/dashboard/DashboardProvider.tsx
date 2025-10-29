@@ -114,10 +114,16 @@ function loadState(): DashboardState {
       }
     });
 
+    const normalisedPages = (base.pages ?? []).map((page) => ({
+      ...page,
+      projectId: page.projectId ?? null
+    }));
+
     return {
       ...base,
       tasks: mergedTasks,
-      goals: mergedGoals
+      goals: mergedGoals,
+      pages: normalisedPages
     };
   } catch (error) {
     console.warn("No se pudo cargar el estado almacenado", error);
@@ -354,6 +360,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       const now = new Date().toISOString();
       const payload: WorkspacePage = {
         ...page,
+        projectId: page.projectId ?? null,
         updatedAt: now,
         createdAt: exists ? page.createdAt : now
       };

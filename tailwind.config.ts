@@ -29,16 +29,16 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["var(--font-sans)", ...defaultTheme.fontFamily.sans],
-        serif: ["var(--font-serif)", ...defaultTheme.fontFamily.serif]
+        emoji: ["var(--font-emoji)", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", ...defaultTheme.fontFamily.sans]
       },
       borderRadius: {
         xl: "var(--radius-base)",
-        "2xl": `calc(var(--radius-base) + 6px)`,
-        full: "999px"
+        "2xl": `calc(var(--radius-base) + 8px)`
       },
       boxShadow: {
-        soft: "0 12px 40px -22px rgba(15, 23, 42, 0.6)",
-        hard: "0 25px 55px -30px rgba(15, 23, 42, 0.65)"
+        shell: "0 40px 120px -60px rgba(15, 23, 42, 0.55)",
+        card: "0 18px 40px -20px rgba(15, 23, 42, 0.35)",
+        badge: "0 2px 10px rgba(15, 23, 42, 0.18)"
       }
     }
   },

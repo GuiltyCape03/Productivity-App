@@ -129,7 +129,7 @@ export function generateAssistantReply(
       day: "2-digit",
       month: "short"
     })}`;
-    const capacityLine = `Capacidad disponible: ${snapshot.bandwidthEstimateMinutes} min de ${snapshot.totalEstimateMinutes} min estimados.`;
+    const capacityLine = `Capacidad disponible: ${snapshot.capacityMin} min de ${snapshot.totalEstimateMinutes} min estimados.`;
     const blockLine = `Bloques sugeridos (50/10): ${snapshot.nextBlock ?? "Planifica un bloque inicial de 50 min y una pausa de 10 min."}`;
     const tasksSection = formatTasks(recommendedTasks);
     const answerLine = question
@@ -174,11 +174,13 @@ export function generateAssistantReply(
 
   persistLastHash(projectKey, hash);
 
-  const updatedMemory: MemoryTurn[] = ([
+  const updatedMemory: MemoryTurn[] = [
     ...memory,
-    ...(question ? [{ role: "user", content: question, timestamp: new Date().toISOString() } as MemoryTurn] : []),
+    ...(question
+      ? [{ role: "user", content: question, timestamp: new Date().toISOString() } as MemoryTurn]
+      : []),
     { role: "assistant", content: reply, timestamp: new Date().toISOString() }
-  ] as MemoryTurn[]).slice(-10);
+  ].slice(-10);
   persistMemory(projectKey, updatedMemory);
 
   return reply;

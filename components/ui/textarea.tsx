@@ -8,7 +8,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
     <textarea
       ref={ref}
       className={cn(
-        "w-full rounded-xl border border-border/70 bg-surface-base/40 px-4 py-3 text-sm text-foreground placeholder:text-foreground-muted transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base",
+        "w-full rounded-xl border border-border/70 bg-surface-elevated/40 px-4 py-3 text-[15px] text-foreground placeholder:text-foreground-muted transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base",
         className
       )}
       {...props}

@@ -1,33 +1,49 @@
-/* app/globals.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
   --surface-base: #0f1118;
-  --surface-elevated: rgba(28, 32, 43, 0.88);
-  --surface-muted: rgba(72, 78, 96, 0.45);
-  --surface-border: rgba(148, 163, 184, 0.22);
-  --foreground-strong: #f5f7ff;
+  --surface-elevated: rgba(23, 26, 35, 0.92);
+  --surface-muted: rgba(99, 105, 123, 0.4);
+  --surface-border: rgba(148, 163, 184, 0.18);
+  --foreground-strong: #f8f9ff;
   --foreground-muted: #cdd3e0;
   --accent-primary: #0ea5a4;
   --accent-secondary: #7c3aed;
   --accent-danger: #fb7185;
-  --radius-base: 16px;
+  --radius-base: 18px;
+  --card-padding-x: 1.5rem;
+  --card-padding-y: 1.5rem;
   color-scheme: dark;
 }
 
 :root[data-theme="light"] {
-  --surface-base: #f7f7fa;
-  --surface-elevated: rgba(255, 255, 255, 0.95);
-  --surface-muted: rgba(228, 231, 239, 0.7);
+  --surface-base: #fafafc;
+  --surface-elevated: rgba(255, 255, 255, 0.97);
+  --surface-muted: rgba(229, 231, 235, 0.65);
   --surface-border: rgba(15, 15, 23, 0.08);
-  --foreground-strong: #0b0b0f;
-  --foreground-muted: #4b5563;
+  --foreground-strong: #0b0f12;
+  --foreground-muted: #5b616f;
   --accent-primary: #0ea5a4;
   --accent-secondary: #2563eb;
-  --accent-danger: #dc2626;
+  --accent-danger: #e11d48;
   color-scheme: light;
+}
+
+body[data-density="comfortable"] {
+  --card-padding-x: 1.6rem;
+  --card-padding-y: 1.6rem;
+}
+
+body[data-density="cozy"] {
+  --card-padding-x: 1.4rem;
+  --card-padding-y: 1.35rem;
+}
+
+body[data-density="compact"] {
+  --card-padding-x: 1.1rem;
+  --card-padding-y: 1.1rem;
 }
 
 html {
@@ -39,10 +55,16 @@ body {
   color: var(--foreground-strong);
   font-feature-settings: "cv02", "cv03", "ss01";
   min-height: 100vh;
+  font-size: 15.5px;
+  line-height: 1.7;
 }
 
 * {
   border-color: var(--surface-border);
+}
+
+.emoji {
+  font-family: var(--font-emoji);
 }
 
 .scrollbar-thin {

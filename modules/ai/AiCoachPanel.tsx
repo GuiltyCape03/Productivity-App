@@ -68,6 +68,11 @@ export function AiCoachPanel() {
 
   const snapshot = useMemo(() => storedSnapshot ?? buildSnapshot(baseState), [storedSnapshot, baseState]);
 
+  const chips = snapshot?.focusChips ?? [];
+  const summary = snapshot?.summary ?? "Define 1–3 tareas y te armo el primer bloque.";
+  const capacity = snapshot?.capacityMin ?? 0;
+  const habits = snapshot?.suggestedHabits ?? [];
+
   const ask = () => {
     if (!question.trim()) return;
     const prompt = question.trim();
@@ -78,7 +83,7 @@ export function AiCoachPanel() {
     ]);
     setQuestion("");
 
-    requestAnimationFrame(() => {
+    window.setTimeout(() => {
       generateAssistantReply(baseState, {
         question: prompt,
         userName: "creador",
@@ -89,7 +94,7 @@ export function AiCoachPanel() {
       if (!storedSnapshot) {
         refreshSnapshot();
       }
-    });
+    }, 80);
   };
 
   const projectOptions = [{ id: "", name: "Todos los proyectos" }, ...projects];
@@ -100,7 +105,7 @@ export function AiCoachPanel() {
         <div className="space-y-1">
           <CardTitle>{strings.title}</CardTitle>
           <p className="text-sm text-foreground-muted">
-            Diagnóstico diario con memoria breve. Planifica en bloques de 50/10 y obtén feedback contextual de tus proyectos.
+            Diagnóstico diario con memoria breve. Planifica en bloques de 50/10 y obtén feedback contextual.
           </p>
         </div>
         <Button variant="secondary" onClick={refreshSnapshot} aria-label="Actualizar plan de IA">
@@ -108,23 +113,29 @@ export function AiCoachPanel() {
         </Button>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="space-y-3 rounded-2xl border border-border/60 bg-surface-base/40 p-4">
+        <section className="space-y-3 rounded-2xl border border-border/60 bg-surface-elevated/50 p-4" aria-live="polite">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="default">{snapshot.pendingCount} pendientes</Badge>
-            <Badge variant="outline">{snapshot.bandwidthEstimateMinutes} min disponibles</Badge>
-            {snapshot.nextBlock && <Badge variant="sky">{snapshot.nextBlock}</Badge>}
+            <Badge variant={snapshot?.sentiment === "overloaded" ? "danger" : snapshot?.sentiment === "stretch" ? "sky" : "default"}>
+              Copiloto IA
+            </Badge>
+            <Badge variant="muted">Capacidad estimada: {capacity} min</Badge>
+            {snapshot?.nextBlock && <Badge variant="outline">Próximo bloque: {snapshot.nextBlock}</Badge>}
           </div>
-          <p className="text-sm text-foreground">{snapshot.summary}</p>
+          <p className="text-sm font-medium text-foreground">{summary}</p>
           <div className="flex flex-wrap gap-2 text-xs text-foreground-muted">
-            {(snapshot.focusChips ?? []).map((chip) => (
-              <span key={chip} className="rounded-full bg-surface-muted/60 px-3 py-1">
-                {chip}
-              </span>
-            ))}
+            {chips.length > 0 ? (
+              chips.map((chip) => (
+                <span key={chip} className="rounded-full bg-surface-muted/70 px-3 py-1">
+                  {chip}
+                </span>
+              ))
+            ) : (
+              <span className="text-xs text-foreground-muted/80">Añade metas con fecha o tareas activas para generar focos.</span>
+            )}
           </div>
-        </div>
+        </section>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="ai-project">Proyecto activo</Label>
             <Select
@@ -142,10 +153,10 @@ export function AiCoachPanel() {
           </div>
           <div className="space-y-2">
             <Label>Hábitos sugeridos</Label>
-            <div className="rounded-xl border border-dashed border-border/60 bg-surface-base/30 p-3 text-xs text-foreground-muted">
-              {(snapshot.suggestedHabits ?? []).length ? (
+            <div className="rounded-xl border border-dashed border-border/60 bg-surface-elevated/40 p-3 text-xs text-foreground-muted">
+              {habits.length ? (
                 <ul className="space-y-1">
-                  {(snapshot.suggestedHabits ?? []).map((habit) => (
+                  {habits.map((habit) => (
                     <li key={habit}>{habit}</li>
                   ))}
                 </ul>
@@ -158,7 +169,7 @@ export function AiCoachPanel() {
 
         <div className="space-y-2">
           <Label htmlFor="ai-question">Haz una pregunta</Label>
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-2 md:flex-row">
             <Input
               id="ai-question"
               value={question}
@@ -182,7 +193,7 @@ export function AiCoachPanel() {
 
         <div className="max-h-72 space-y-3 overflow-y-auto pr-1 scrollbar-thin" role="log" aria-live="polite">
           {messages.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-border/60 bg-surface-base/30 p-4 text-sm text-foreground-muted">
+            <p className="rounded-xl border border-dashed border-border/60 bg-surface-elevated/40 p-4 text-sm text-foreground-muted">
               El chatbot conoce tus tareas, metas y calendario. Haz una pregunta para iniciar la conversación.
             </p>
           ) : (
@@ -192,7 +203,7 @@ export function AiCoachPanel() {
                 className={
                   message.role === "assistant"
                     ? "rounded-2xl bg-accent-primary/15 p-3 text-sm text-foreground"
-                    : "rounded-2xl border border-border/60 bg-surface-base/40 p-3 text-sm text-foreground"
+                    : "rounded-2xl border border-border/60 bg-surface-elevated/40 p-3 text-sm text-foreground"
                 }
               >
                 <div className="flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.18em] text-foreground-muted">

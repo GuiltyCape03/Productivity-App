@@ -37,6 +37,7 @@ export interface WorkspacePage {
   id: string;
   title: string;
   icon: string;
+  projectId: string | null;
   blocks: Array<{
     id: string;
     type: "heading" | "text" | "checklist" | "divider" | "callout";
@@ -56,14 +57,17 @@ export interface CalendarEvent {
   metadata?: Record<string, string>;
 }
 
-export interface AiSnapshot {
+export type FocusSnapshot = {
+  summary: string;
+  focusChips: string[];
+  capacityMin: number;
+};
+
+export interface AiSnapshot extends FocusSnapshot {
   focusProjects: string[];
   recommendedTasks: string[];
   suggestedHabits: string[];
-  bandwidthEstimateMinutes: number;
   sentiment: "steady" | "overloaded" | "stretch";
-  summary: string;
-  focusChips: string[];
   pendingCount: number;
   totalEstimateMinutes: number;
   dailyGoal?: string;
