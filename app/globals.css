@@ -11,10 +11,35 @@
   --grid-gap: 2.5rem;
   --grid-columns: repeat(12, minmax(0, 1fr));
   --transition-base: 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  --surface-padding: 1.25rem;
+  --surface-gap: 1rem;
+  --stack-gap: 1.25rem;
+  --input-height: 2.5rem;
 }
 
 :root[data-theme="light"] {
   --shadow-card: 0 18px 48px rgba(15, 23, 42, 0.12);
+}
+
+[data-density="compact"] {
+  --surface-padding: 0.75rem;
+  --surface-gap: 0.75rem;
+  --stack-gap: 0.75rem;
+  --input-height: 2.25rem;
+}
+
+[data-density="cozy"] {
+  --surface-padding: 1.25rem;
+  --surface-gap: 1rem;
+  --stack-gap: 1.25rem;
+  --input-height: 2.5rem;
+}
+
+[data-density="comfortable"] {
+  --surface-padding: 1.5rem;
+  --surface-gap: 1.25rem;
+  --stack-gap: 1.5rem;
+  --input-height: 2.75rem;
 }
 
 html {
@@ -99,6 +124,23 @@ h6 {
       linear-gradient(to right, hsl(var(--border) / 0.16) 1px, transparent 1px),
       linear-gradient(to bottom, hsl(var(--border) / 0.16) 1px, transparent 1px);
     background-size: 48px 48px;
+  }
+
+  .stack-gap {
+    display: flex;
+    flex-direction: column;
+    gap: var(--stack-gap);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

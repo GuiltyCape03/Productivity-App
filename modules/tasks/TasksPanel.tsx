@@ -1,7 +1,7 @@
 "use client";
 
 import { type ChangeEvent, type FormEvent, useEffect, useMemo, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Surface } from "@/components/ui/Surface";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { STRINGS } from "@/i18n/strings";
 import { useDashboard } from "@/modules/dashboard/DashboardProvider";
 import type { Task, TaskPriority } from "@/modules/dashboard/types";
@@ -24,9 +25,9 @@ const PRIORITIES: Array<{ value: TaskPriority; label: string }> = [
 ];
 
 const PRIORITY_STYLES: Record<TaskPriority, string> = {
-  high: "bg-rose-500/15 text-rose-400",
-  medium: "bg-amber-500/15 text-amber-400",
-  low: "bg-emerald-500/15 text-emerald-400"
+  high: "border-[hsla(var(--danger)/0.35)] bg-[hsla(var(--danger)/0.18)] text-[hsl(var(--danger))]",
+  medium: "border-[hsla(var(--warning)/0.35)] bg-[hsla(var(--warning)/0.18)] text-[hsl(var(--warning))]",
+  low: "border-[hsla(var(--success)/0.35)] bg-[hsla(var(--success)/0.18)] text-[hsl(var(--success))]"
 };
 
 const NEW_PROJECT_VALUE = "__new__";
@@ -63,16 +64,16 @@ function TaskRow({ task, onToggle, onEdit, onDelete }: { task: Task; onToggle: (
     onToggle();
   };
   return (
-    <div className="rounded-2xl border border-border/60 bg-surface-elevated/60 p-5 transition hover:border-accent-primary/50">
+    <div className="rounded-xl border border-white/5 bg-white/5 p-4 transition hover:border-white/15">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="flex items-start gap-3">
           <Checkbox checked={task.status === "done"} onChange={handleToggle} aria-label={`Cambiar estado de ${task.title}`} />
           <div className="space-y-2">
             <div>
-              <p className={cn("text-sm font-medium text-foreground", task.status === "done" && "text-foreground-muted line-through")}>{task.title}</p>
-              {task.description && <p className="mt-1 text-xs leading-relaxed text-foreground-muted">{task.description}</p>}
+              <p className={cn("text-sm font-medium text-[hsl(var(--text))]", task.status === "done" && "text-[hsl(var(--muted))] line-through")}>{task.title}</p>
+              {task.description && <p className="mt-1 text-xs leading-relaxed text-[hsl(var(--muted))]">{task.description}</p>}
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-foreground-muted">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-[hsl(var(--muted))]">
               <span>{task.estimateMinutes ?? 25} min</span>
               <span>• {task.priority}</span>
               {task.projectId && <span>• Proyecto #{task.projectId.slice(0, 4)}</span>}
@@ -80,11 +81,11 @@ function TaskRow({ task, onToggle, onEdit, onDelete }: { task: Task; onToggle: (
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className={cn("rounded-full px-3 py-1 text-xs font-medium", PRIORITY_STYLES[task.priority])}>{task.priority}</span>
+          <span className={cn("rounded-full border px-3 py-1 text-xs font-medium capitalize", PRIORITY_STYLES[task.priority])}>{task.priority}</span>
           {due && <Badge variant="muted">Vence {due}</Badge>}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="text-foreground-muted hover:text-foreground" aria-label={`Acciones para ${task.title}`}>
+              <Button variant="ghost" size="sm" className="text-[hsl(var(--muted))]" aria-label={`Acciones para ${task.title}`}>
                 <MoreHorizontal className="h-4 w-4" aria-hidden />
               </Button>
             </DropdownMenuTrigger>
@@ -111,7 +112,8 @@ export function TasksPanel() {
     toggleTaskStatus,
     addProject,
     activeProjectId,
-    setActiveProject
+    setActiveProject,
+    density
   } = useDashboard();
   const strings = STRINGS.es.tasks;
   const [form, setForm] = useState<FormState>({ ...defaultForm, projectId: activeProjectId ?? null });
@@ -225,91 +227,98 @@ export function TasksPanel() {
   const projectOptions = [{ id: "", name: "Todos los proyectos" }, ...projects];
 
   return (
-    <Card>
-      <CardHeader className="space-y-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <CardTitle>{strings.title}</CardTitle>
-            <p className="mt-1 text-sm text-foreground-muted">
-              Define el mínimo viable de hoy. Usa Enter para registrar en caliente.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Label className="text-xs text-foreground-muted uppercase tracking-[0.2em]">Proyecto activo</Label>
-            <Select value={activeProjectId ?? ""} onChange={(event) => setActiveProject(event.target.value || null)}>
-              {projectOptions.map((project) => (
-                <option key={project.id || "all"} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </Select>
-          </div>
+    <Surface as="section" aria-labelledby="tasks-heading" className="gap-[var(--surface-gap)]">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="space-y-2">
+          <h2 id="tasks-heading" className="text-2xl font-semibold tracking-tight text-[hsl(var(--text))]">
+            {strings.title}
+          </h2>
+          <p className="text-sm text-[hsl(var(--muted))]">
+            Define el mínimo viable de hoy. Usa Enter para registrar en caliente.
+          </p>
         </div>
-        <form onSubmit={onSubmit} className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-surface-elevated/50 p-4" aria-label="Añadir tarea">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center">
-            <Input
-              value={form.title}
-              onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
-              placeholder="Escribe la tarea mínima a completar"
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  submitTask();
-                }
-              }}
-              aria-label="Título de la tarea"
-            />
-            <Select
-              value={form.projectId ?? ""}
-              onChange={(event) => handleTaskProjectChange(event.target.value)}
-              aria-label="Proyecto de la tarea"
-            >
-              <option value="">Sin proyecto</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-              <option value={NEW_PROJECT_VALUE}>+ Nuevo proyecto</option>
-            </Select>
-            <Select
-              value={form.priority}
-              onChange={(event) => setForm((prev) => ({ ...prev, priority: event.target.value as TaskPriority }))}
-              aria-label="Prioridad"
-            >
-              {PRIORITIES.map((priority) => (
-                <option key={priority.value} value={priority.value}>
-                  {priority.label}
-                </option>
-              ))}
-            </Select>
-            <Button type="button" variant="secondary" onClick={() => setDetailsOpen(true)}>
-              Detalles
-            </Button>
-            <Button type="submit">{editingTask ? "Guardar" : "Añadir"}</Button>
-          </div>
-          {error && <p className="text-sm text-accent-danger">{error}</p>}
-        </form>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {sortedTasks.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border/60 bg-surface-elevated/40 p-6 text-sm text-foreground-muted">
-            No hay tareas aún. Empieza creando tu objetivo mínimo viable de hoy.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {sortedTasks.map((task) => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                onToggle={() => toggleTaskStatus(task.id)}
-                onEdit={() => startEdit(task)}
-                onDelete={() => removeTask(task.id)}
-              />
+        <div className="flex flex-wrap items-center gap-2 text-sm text-[hsl(var(--muted))]">
+          <Label className="text-xs font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted))]">Proyecto activo</Label>
+          <Select value={activeProjectId ?? ""} onChange={(event) => setActiveProject(event.target.value || null)}>
+            {projectOptions.map((project) => (
+              <option key={project.id || "all"} value={project.id}>
+                {project.name}
+              </option>
             ))}
-          </div>
+          </Select>
+        </div>
+      </div>
+      <form
+        onSubmit={onSubmit}
+        className={cn(
+          "rounded-xl border border-white/5 bg-white/5 p-4",
+          "flex flex-col md:flex-row md:items-center",
+          density.stack
         )}
-      </CardContent>
+        aria-label="Añadir tarea"
+      >
+        <Input
+          value={form.title}
+          onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
+          placeholder={strings.addPlaceholder}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              submitTask();
+            }
+          }}
+          aria-label="Título de la tarea"
+        />
+        <Select
+          value={form.projectId ?? ""}
+          onChange={(event) => handleTaskProjectChange(event.target.value)}
+          aria-label="Proyecto de la tarea"
+        >
+          <option value="">Sin proyecto</option>
+          {projects.map((project) => (
+            <option key={project.id} value={project.id}>
+              {project.name}
+            </option>
+          ))}
+          <option value={NEW_PROJECT_VALUE}>+ Nuevo proyecto</option>
+        </Select>
+        <Select
+          value={form.priority}
+          onChange={(event) => setForm((prev) => ({ ...prev, priority: event.target.value as TaskPriority }))}
+          aria-label="Prioridad"
+        >
+          {PRIORITIES.map((priority) => (
+            <option key={priority.value} value={priority.value}>
+              {priority.label}
+            </option>
+          ))}
+        </Select>
+        <Button type="button" variant="secondary" onClick={() => setDetailsOpen(true)}>
+          Detalles
+        </Button>
+        <Button type="submit">{editingTask ? "Guardar" : "Añadir"}</Button>
+      </form>
+      {error && <p className="text-sm text-[hsl(var(--danger))]">{error}</p>}
+      {sortedTasks.length === 0 ? (
+        <EmptyState
+          emoji="📝"
+          title="No hay tareas"
+          description="Crea una micro-tarea de 25 min."
+          action={<Button variant="ghost" size="sm" onClick={() => setDetailsOpen(true)}>Agregar detalles</Button>}
+        />
+      ) : (
+        <div className={cn("flex flex-col", density.stack)}>
+          {sortedTasks.map((task) => (
+            <TaskRow
+              key={task.id}
+              task={task}
+              onToggle={() => toggleTaskStatus(task.id)}
+              onEdit={() => startEdit(task)}
+              onDelete={() => removeTask(task.id)}
+            />
+          ))}
+        </div>
+      )}
 
       <Dialog open={isDetailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent>

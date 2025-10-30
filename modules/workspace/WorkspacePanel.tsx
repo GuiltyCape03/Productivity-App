@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Route } from "next"; // 👈 IMPORTANTE
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Surface, SurfaceContent, SurfaceHeader, SurfaceTitle } from "@/components/ui/Surface";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -248,10 +248,10 @@ export function WorkspacePanel() {
   };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <Surface as="section">
+      <SurfaceHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-0 pb-0">
         <div>
-          <CardTitle>{strings.title}</CardTitle>
+          <SurfaceTitle>{strings.title}</SurfaceTitle>
           <p className="mt-1 text-sm text-foreground-muted">
             Organiza documentos con estilo tipo Notion y conviértelos en acciones.
           </p>
@@ -266,8 +266,8 @@ export function WorkspacePanel() {
             </Button>
           )}
         </div>
-      </CardHeader>
-      <CardContent>
+      </SurfaceHeader>
+      <SurfaceContent className="pt-6">
         <div className="grid gap-6 md:grid-cols-[minmax(0,260px)_1fr] md:gap-8">
           <aside className="space-y-4">
             <div>
@@ -339,7 +339,7 @@ export function WorkspacePanel() {
             )}
           </section>
         </div>
-      </CardContent>
+      </SurfaceContent>
 
       <Dialog open={isCreateOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
@@ -524,6 +524,6 @@ export function WorkspacePanel() {
           )}
         </DialogContent>
       </Dialog>
-    </Card>
+    </Surface>
   );
 }
