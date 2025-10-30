@@ -9,7 +9,7 @@ export function useSyncPreferences() {
   useEffect(() => {
     if (typeof document === "undefined") return;
     document.documentElement.dataset.theme = preferences.theme;
-    document.body.dataset.density = preferences.density;
+    document.body.dataset.density = preferences.density ?? "cozy";
   }, [preferences.theme, preferences.density]);
 
   return preferences;

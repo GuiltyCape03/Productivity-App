@@ -7,19 +7,20 @@ type ButtonElement = HTMLButtonElement;
 type ButtonProps = ButtonHTMLAttributes<ButtonElement> & VariantProps<typeof styles>;
 
 const styles = cva(
-  "inline-flex h-11 min-w-[2.75rem] items-center justify-center gap-2 rounded-xl px-5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base disabled:cursor-not-allowed disabled:opacity-55",
+  "inline-flex min-w-[2.75rem] items-center justify-center gap-2 rounded-xl border border-white/10 bg-[hsl(var(--panel))] px-5 text-sm font-medium text-[hsl(var(--text))] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--accent))]/60 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-55",
   {
     variants: {
       variant: {
-        primary: "bg-accent-primary text-white shadow-card hover:brightness-105",
-        secondary: "bg-surface-muted/50 text-foreground hover:bg-surface-muted/70",
-        ghost: "text-foreground-muted hover:text-foreground hover:bg-surface-muted/40",
-        outline: "border border-border/70 bg-transparent text-foreground hover:border-border hover:bg-surface-muted/40"
+        primary:
+          "border-transparent bg-[hsl(var(--accent))] text-[hsl(var(--bg))] hover:bg-[hsl(var(--accent-2))]",
+        secondary: "bg-white/5 text-[hsl(var(--text))] hover:bg-white/10",
+        ghost: "border-transparent bg-transparent text-[hsl(var(--muted))] hover:bg-white/5 hover:text-[hsl(var(--text))]",
+        outline: "bg-transparent text-[hsl(var(--text))] hover:bg-white/5"
       },
       size: {
-        sm: "h-9 px-4 text-xs",
-        md: "h-11 px-5 text-sm",
-        lg: "h-12 px-6 text-base"
+        sm: "h-[calc(var(--input-height)-0.25rem)] px-4 text-xs",
+        md: "h-[var(--input-height)] px-5 text-sm",
+        lg: "h-[calc(var(--input-height)+0.25rem)] px-6 text-base"
       }
     },
     defaultVariants: {

@@ -32,6 +32,12 @@ interface DashboardContextValue extends DashboardState {
   refreshSnapshot: () => void;
   recordCalendarState: (payload: DashboardState["connectedCalendar"] | undefined) => void;
   resetAllState: () => void;
+  density: {
+    name: DashboardPreferences["density"];
+    panel: string;
+    stack: string;
+    input: string;
+  };
 }
 
 const STORAGE_KEY = "neuraldesk.dashboard.v1";
@@ -54,7 +60,7 @@ const initialState: DashboardState = {
     cardTone: "glass",
     cardShadow: "soft",
     fieldShape: "filled",
-    density: "comfortable",
+    density: "cozy",
     accent: "emerald"
   },
   activeProjectId: null
@@ -443,6 +449,17 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const density = useMemo(() => {
+    const current = state.preferences.density ?? "cozy";
+    if (current === "compact") {
+      return { name: current, panel: "p-3", stack: "gap-3", input: "h-9" };
+    }
+    if (current === "comfortable") {
+      return { name: current, panel: "p-6", stack: "gap-5", input: "h-11" };
+    }
+    return { name: "cozy" as const, panel: "p-5", stack: "gap-4", input: "h-10" };
+  }, [state.preferences.density]);
+
   const value = useMemo<DashboardContextValue>(() => ({
     ...state,
     addTask,
@@ -461,7 +478,8 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     updatePreferences,
     refreshSnapshot,
     recordCalendarState,
-    resetAllState
+    resetAllState,
+    density
   }), [
     state,
     addTask,
@@ -480,7 +498,8 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     updatePreferences,
     refreshSnapshot,
     recordCalendarState,
-    resetAllState
+    resetAllState,
+    density
   ]);
 
   return <DashboardContext.Provider value={value}>{children}</DashboardContext.Provider>;

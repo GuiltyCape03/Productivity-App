@@ -14,6 +14,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
       defaultTheme="dark"
       enableSystem
       disableTransitionOnChange
+      storageKey="nd-theme"
     >
       {children}
     </NextThemesProvider>
