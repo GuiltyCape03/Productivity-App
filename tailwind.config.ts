@@ -11,20 +11,38 @@ const config: Config = {
     },
     extend: {
       colors: {
-        surface: {
-          base: "var(--surface-base)",
-          elevated: "var(--surface-elevated)",
-          muted: "var(--surface-muted)"
-        },
+        background: "hsl(var(--bg))",
         foreground: {
-          DEFAULT: "var(--foreground-strong)",
-          muted: "var(--foreground-muted)"
+          DEFAULT: "hsl(var(--text))",
+          muted: "hsl(var(--muted))",
+          subtle: "hsl(var(--muted))"
         },
-        border: "var(--surface-border)",
+        primary: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--bg))",
+          subtle: "hsl(var(--accent-2))"
+        },
+        muted: {
+          DEFAULT: "hsl(var(--muted))",
+          foreground: "hsl(var(--text))"
+        },
+        card: {
+          DEFAULT: "hsl(var(--panel))",
+          foreground: "hsl(var(--text))"
+        },
+        border: "hsl(var(--border))",
+        success: "hsl(var(--success))",
+        warning: "hsl(var(--warning))",
+        danger: "hsl(var(--danger))",
+        surface: {
+          base: "hsl(var(--bg))",
+          elevated: "hsl(var(--panel))",
+          muted: "hsl(var(--muted))"
+        },
         accent: {
-          primary: "var(--accent-primary)",
-          secondary: "var(--accent-secondary)",
-          danger: "var(--accent-danger)"
+          primary: "hsl(var(--accent))",
+          secondary: "hsl(var(--accent-2))",
+          danger: "hsl(var(--danger))"
         }
       },
       fontFamily: {
